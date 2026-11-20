@@ -1,0 +1,3 @@
+# QMK makefiles break on CRLF, so keep LF in the working tree on every platform.
+* text=auto eol=lf
+*.bin binary
