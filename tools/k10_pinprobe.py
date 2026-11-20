@@ -5,6 +5,7 @@ Needs the `pinprobe` build on the keyboard (keychron/k10/rgb/iso:pinprobe) and `
     python tools/k10_pinprobe.py            # listen, then walk
     python tools/k10_pinprobe.py --only listen
     python tools/k10_pinprobe.py --only walk --exclude D5,D6
+    python tools/k10_pinprobe.py --only walk --pins A2,A5,A6,A7   # drive only these, high
     python tools/k10_pinprobe.py --only walk --low A3,A4     # drive these LOW instead (active-low LEDs)
 
 Listen (30 s): you slide the two switches back and forth; the script notes which pins react.
@@ -85,25 +86,31 @@ def listen(dev, seconds):
     last = None
     start = time.monotonic()
     n = 0
-    while (now := time.monotonic() - start) < seconds:
-        up = probe_get(dev, PV_LEVELS)
-        for p, v in zip(PINS, up):
-            seen_up[p].add(v)
-        if last is not None:
-            for p, a, b in zip(PINS, last, up):
-                if a != b:
-                    events.append({"t": round(now, 1), "pin": p, "from": a, "to": b})
-                    print(f"  {now:5.1f}s  {p} went {a} -> {b}")
-        last = up
-        if n % 4 == 0:
-            for p, v in zip(PINS, probe_get(dev, PV_FLOAT)):
-                seen_float[p].add(v)
-            for p, v in zip(PINS, probe_get(dev, PV_TOGGLES)):
-                toggles[p] += v
-        n += 1
-        time.sleep(0.15)
-    for p, v in zip(PINS, probe_get(dev, PV_TOGGLES)):
-        toggles[p] += v
+    lost = False
+    try:
+        while (now := time.monotonic() - start) < seconds:
+            up = probe_get(dev, PV_LEVELS)
+            for p, v in zip(PINS, up):
+                seen_up[p].add(v)
+            if last is not None:
+                for p, a, b in zip(PINS, last, up):
+                    if a != b:
+                        events.append({"t": round(now, 1), "pin": p, "from": a, "to": b})
+                        print(f"  {now:5.1f}s  {p} went {a} -> {b}")
+            last = up
+            if n % 4 == 0:
+                for p, v in zip(PINS, probe_get(dev, PV_FLOAT)):
+                    seen_float[p].add(v)
+                for p, v in zip(PINS, probe_get(dev, PV_TOGGLES)):
+                    toggles[p] += v
+            n += 1
+            time.sleep(0.15)
+        for p, v in zip(PINS, probe_get(dev, PV_TOGGLES)):
+            toggles[p] += v
+    except OSError:
+        # On the K10 the mode switch passes through Off between Cable and BT, which cuts power.
+        lost = True
+        print(f"  {time.monotonic() - start:5.1f}s  keyboard lost power or was unplugged; keeping what was seen so far")
 
     result = {}
     for p in PINS:
@@ -120,7 +127,7 @@ def listen(dev, seconds):
     for p in PINS:
         r = result[p]
         print(f"  {p:<4}  {str(r['pullup_levels']):<7}  {str(r['float_levels']):<8}  {r['changes']:<7}  {r['kind']}")
-    return result, events
+    return result, events, lost
 
 
 def walk(dev, pins, level, seconds):
@@ -158,6 +165,7 @@ def main():
     ap.add_argument("--listen-seconds", type=float, default=30)
     ap.add_argument("--pulse-seconds", type=float, default=3.0)
     ap.add_argument("--exclude", default="", help="pins never to drive, e.g. D5,D6")
+    ap.add_argument("--pins", default="", help="walk ONLY these pins, driving them high, e.g. A2,A5,A6,A7")
     ap.add_argument("--low", default="", help="walk ONLY these pins, driving them LOW (for active-low LEDs)")
     ap.add_argument("--out", default=str(pathlib.Path(__file__).resolve().parent.parent / "dist" / "pinprobe-result.json"))
     args = ap.parse_args()
@@ -165,7 +173,8 @@ def main():
         sys.exit("--pulse-seconds must be between 0.1 and 3")
     exclude = {p.strip().upper() for p in args.exclude.split(",") if p.strip()}
     low = [p.strip().upper() for p in args.low.split(",") if p.strip()]
-    for p in exclude | set(low):
+    only_pins = [p.strip().upper() for p in args.pins.split(",") if p.strip()]
+    for p in exclude | set(low) | set(only_pins):
         if p not in PINS:
             sys.exit(f"unknown pin {p}; choose from {', '.join(PINS)}")
 
@@ -175,14 +184,18 @@ def main():
     out["start"] = {p: {"pullup": u, "float": f} for p, u, f in zip(PINS, start_up, start_float)}
     print("Levels now (pull-up on / off):  " + "  ".join(f"{p}={u}/{f}" for p, u, f in zip(PINS, start_up, start_float)))
 
-    verdicts = {}
+    verdicts, lost = {}, False
     if args.only != "walk":
-        verdicts, events = listen(dev, args.listen_seconds)
-        out["listen"], out["events"] = verdicts, events
+        verdicts, events, lost = listen(dev, args.listen_seconds)
+        out["listen"], out["events"], out["lost_power"] = verdicts, events, lost
 
-    if args.only != "listen":
+    if lost:
+        print("\nNot walking: the keyboard went away. Run again with --only walk once it is back.")
+    elif args.only != "listen":
         if low:
             targets, level = [p for p in low if p not in exclude], 0
+        elif only_pins:
+            targets, level = [p for p in only_pins if p not in exclude], 1
         else:
             unsafe = {p for p, r in verdicts.items() if not r["kind"].startswith("quiet")}
             targets, level = [p for p in PINS if p not in exclude and p not in unsafe], 1
