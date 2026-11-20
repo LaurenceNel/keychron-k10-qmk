@@ -1,0 +1,113 @@
+# QMK for the original Keychron K10
+
+QMK and VIA firmware for the **original Keychron K10** (2021, Sonix SN32F248B), built on [SonixQMK](https://github.com/SonixQMK/qmk_firmware). The original K10 ships with closed firmware: no remapping, no VIA, and no way for software to set the backlight. This gives it all three.
+
+> **Status: early.** It runs on one board (ISO, RGB, hot-swap). Read "Before you flash" first.
+
+## Is this your keyboard?
+
+| | This firmware | Not this firmware |
+|---|---|---|
+| Model | Keychron K10, the original | K10 QMK (Version 2), K10 Pro, K10 Max, K10 HE: they already run QMK |
+| USB ID on stock firmware | `05AC:0250` | `3434:xxxx` |
+| Main chip | Sonix SN32F248B (64 pins, may be unmarked) | Westberry WB32, STM32 |
+| Layout | ISO | ANSI (not added yet) |
+| Backlight | RGB | White (different chip, SN32F260) |
+
+`docs/porting-notes.md` has the PCB markings and how to confirm the chip.
+
+## Before you flash
+
+- **Bluetooth stops working.** The Bluetooth module is a separate closed system. This firmware is USB only.
+- **It may be one-way.** Keychron publishes stock K10 firmware for the soldered Gateron versions only. For the ISO hot-swap board there is no known stock image, so there may be no way back to stock (and Bluetooth).
+- **Bricking is unlikely.** The chip's bootloader is in ROM, so a bad flash can always be redone by shorting the BOOT pads.
+- **You need to open the case once** to short the BOOT pads for the first flash. Later flashes don't.
+- This is unofficial and comes with no warranty. It is not affiliated with Keychron.
+
+## What works
+
+- All 105 keys, UK/ISO layout. Seven key positions are inferred, not measured (Del, End, PgDn, numpad 7 8 9 +). They are listed in the porting notes.
+- Per-key RGB with QMK's RGB Matrix effects.
+- VIA: remapping, three layers, lighting menu.
+- Lighting control from the PC over VIA raw HID (`tools/k10_via.py`).
+- Bootloader without opening the case: hold `Esc` while plugging in, or `Fn + Esc`.
+
+## What doesn't (yet)
+
+- Bluetooth (not planned).
+- The Win/Mac and Cable/BT/Off slide switches are ignored.
+- The dedicated Caps Lock and Num Lock indicator LEDs. The key's own LED turns white instead.
+- ANSI layout.
+
+## Default keymap
+
+Standard UK ISO. The three keys right of F12 are Print Screen, Scroll Lock and "next lighting effect". Right of space: Alt, Win, Fn, Ctrl.
+
+| Fn + | Does |
+|---|---|
+| Esc | Bootloader |
+| F1 / F2 | Screen brightness down / up |
+| F3 / F4 | Task view / File Explorer |
+| F5 / F6 | Backlight brightness down / up |
+| F7 / F8 / F9 | Previous / play-pause / next |
+| F10 / F11 / F12 | Mute / volume down / volume up |
+| Print Screen / Scroll Lock | Snipping tool / Pause |
+| Light key | Backlight on / off |
+| Ins / Del | Hue up / down |
+| Home / End | Brightness up / down |
+| PgUp / PgDn | Saturation up / down |
+| Up / Down | Effect speed up / down |
+| Left / Right | Previous / next effect |
+
+## Flashing
+
+1. Get `keychron_k10_rgb_iso_via.bin` (or `..._default.bin` without VIA) from the releases, or build it.
+2. Enter the bootloader:
+   - **From stock firmware:** unplug USB, disconnect the battery, bridge the BOOT and GND pads near the spacebar with tweezers while plugging USB in.
+   - **From this firmware:** hold `Esc` while plugging in, or press `Fn + Esc`.
+3. Flash with [Sonix Flasher](https://github.com/SonixQMK/sonix-flasher/releases/latest): the detected `SN32F24xB` device, QMK offset `0x00`, "Flash QMK...".
+4. Unplug and replug.
+
+### Using VIA
+
+Open [usevia.app](https://usevia.app) in Chrome or Edge, turn on "Show Design tab" in Settings, and load `keyboards/keychron/k10/rgb/via_json/k10_iso.json` in the Design tab.
+
+## Lighting from the PC
+
+```
+pip install hidapi
+python tools/k10_via.py                  # show the current lighting state
+python tools/k10_via.py --color 170 255  # solid blue (hue and saturation, 0-255)
+python tools/k10_via.py --demo           # green, then blue, then back
+```
+
+Changes are not saved to the keyboard.
+
+## Building
+
+The keyboard folder is an overlay for SonixQMK, tested at `sn32_develop` commit [`c9f3803f`](https://github.com/SonixQMK/qmk_firmware/commit/c9f3803ff1cb910a713c6202cab357268cf98fa6).
+
+```
+git clone --recurse-submodules -b sn32_develop https://github.com/SonixQMK/qmk_firmware
+# copy this repo's keyboards/keychron/k10 into qmk_firmware/keyboards/keychron/
+make keychron/k10/rgb/iso:via
+```
+
+On Windows with [QMK MSYS](https://msys.qmk.fm), `scripts\build.ps1` does the copy and builds every target into `dist\`. Keep the firmware checkout on a path without spaces.
+
+`tools/gen_k10_iso.py` generates `keyboard.json` and the VIA definition from one key list. Edit the list there, not the JSON.
+
+## Layout of this repo
+
+```
+keyboards/keychron/k10/rgb/iso/     the keyboard: definition, config, default and via keymaps
+keyboards/keychron/k10/rgb/via_json VIA definition
+keyboards/keychron/k10/probe/       wiring-probe firmware used to map the board
+tools/                              layout generator, PC lighting control
+scripts/build.ps1                   Windows build helper
+docs/porting-notes.md               hardware facts, how it was mapped, what is unknown
+```
+
+## Credits and licence
+
+Built on [SonixQMK](https://github.com/SonixQMK/qmk_firmware) and its Keychron K4 and C2 ports, which this port follows closely. Licensed GPL-2.0-or-later, like QMK. Source for any released binary is this repo plus SonixQMK at the commit above.
