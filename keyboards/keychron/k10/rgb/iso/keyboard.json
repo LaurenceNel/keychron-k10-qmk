@@ -11,7 +11,13 @@
         "extrakey": true,
         "mousekey": false,
         "nkro": false,
-        "rgb_matrix": true
+        "rgb_matrix": true,
+        "dip_switch": true
+    },
+    "dip_switch": {
+        "pins": [
+            "D4"
+        ]
     },
     "matrix_pins": {
         "cols": [
@@ -1012,6 +1018,42 @@
                 "x": 209,
                 "y": 59,
                 "flags": 4
+            },
+            {
+                "matrix": [
+                    0,
+                    17
+                ],
+                "x": 190,
+                "y": 0,
+                "flags": 0
+            },
+            {
+                "matrix": [
+                    0,
+                    18
+                ],
+                "x": 202,
+                "y": 0,
+                "flags": 0
+            },
+            {
+                "matrix": [
+                    0,
+                    19
+                ],
+                "x": 213,
+                "y": 0,
+                "flags": 0
+            },
+            {
+                "matrix": [
+                    0,
+                    20
+                ],
+                "x": 224,
+                "y": 0,
+                "flags": 0
             }
         ]
     },

@@ -15,7 +15,9 @@ Make example for this keyboard (after setting up your build environment):
 * Key rows: `C15, D11, D10, D9, D8, D7`
 * Key columns: `A8-A15, B0-B12` (21), diodes `COL2ROW`
 * Confirmed with the probe firmware in `keyboards/keychron/k10/probe`.
-* LED sink pins and the Caps/Num indicator and switch pins are assumed or unknown. See `config.h` and `iso.c`.
+* Indicator LEDs (Num Lock, Caps Lock, Mac, Windows): in the LED matrix at row 0, columns 17-20, positions with no key.
+* Win/Mac switch: `D4`. Cable/BT switch: `D5` (not used).
+* LED sink pins: taken from the K2/K3/K4/K8 ports. See `config.h`.
 
 ## How to flash
 

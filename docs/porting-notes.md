@@ -41,9 +41,11 @@ Found with the probe firmware in `keyboards/keychron/k10/probe`, which drives on
 | Key columns | `A8-A15, B0-B12` (21) | Confirmed |
 | Diode direction | `COL2ROW` | Confirmed |
 | LED sink pins (R, B, G per row) | `C3, C1, C0, C6, C5, C4, C9, C8, C7, C12, C11, C10, B13, C14, C13, B14, B15, D3` | Taken from the K2/K3/K4/K8 ports. Lights work on the development board; exact row and colour order not individually checked |
-| `A0-A7` | No keys. Probably the Bluetooth module (UART2 is on `A0`/`A1`) | Left as inputs |
-| Indicator LEDs, top right (Num Lock, Caps Lock, Mac, Windows) | Unknown. With every `B` and `C` pin taken, they must be among `A0-A7`, `D4`, `D5`, `D6` | Not driven, so all four stay dark. Caps Lock and Num Lock show on the key's own LED instead |
-| Win/Mac and Cable/BT/Off switches | Unknown | Ignored |
+| Indicator LEDs, top right | In the LED matrix, not on GPIO: row 0, columns 17, 18, 19, 20 = Num Lock, Caps Lock, Mac, Windows | Confirmed by lighting each spare matrix position in turn |
+| Win/Mac switch | `D4` | Confirmed. Which level means Mac is assumed (low) |
+| Cable/BT switch | `D5`: low on Cable, high on BT. The middle Off position cuts power, even on USB | Seen, not used |
+| `A0`, `A1`, `A3`, `A4` | Bluetooth module lines: they change state once the module has been powered | Left as inputs. Never drive them |
+| `A2`, `A5`, `A6`, `A7`, `D6` | No keys, and driving each high lights nothing | Left as inputs |
 
 Each LED column needs its own PWM channel, and `A0-A7` share channels with `B8-B15`, which is why 21 columns land on `A8-A15, B0-B12`.
 
@@ -56,6 +58,12 @@ Each LED column needs its own PWM channel, and `A0-A7` share channels with `B8-B
 - Numpad 0 at `[5,17]`, numpad `.` at `[5,19]`.
 
 Seven keys were missed in that run and were placed by inference from the C2 at row 2, columns 14-20: Del, End, PgDn, numpad 7, 8, 9 and +. All seven were then confirmed working on the board with the finished firmware.
+
+### Finding the indicator LEDs
+
+The first guess was spare GPIO pins, as on the K4 and C2. The `pinprobe` keymap and `tools/k10_pinprobe.py` drove `A2`, `A5`, `A6`, `A7` and `D6` high one at a time and no LED lit. The K10 has no need for dedicated pins: its top row leaves four LED-matrix positions free above the numpad, and the indicators are wired there. A build with an LED entry at every unused matrix position (`K10_PROBE_LEDS=1`, `--leds all`) lit them one by one: positions `[0,17]` to `[0,20]` are the four indicators, and none of the other 17 unused positions has an LED.
+
+In `keyboard.json` these four carry LED flag 0, so effects skip them. `iso.c` sets them every frame, and RM_TOGG blanks the keys by clearing the effect flags instead of stopping the matrix, so the indicators keep working with the backlight off.
 
 ## Stock firmware and going back
 
@@ -70,6 +78,6 @@ The default emulated EEPROM on this chip is 1024 bytes. Four VIA layers of a 6x2
 ## Not done yet
 
 - ANSI layout variant.
-- The four indicator LEDs and the two slide switches. Plan: an input-only probe of `A0-A7`, `D4`, `D5`, `D6` while flipping the switches, to find the switch pins and rule out busy lines, before any candidate pin is driven as an output.
+- Confirming which Win/Mac switch position reads low, and deciding whether Mac mode should change the keymap.
 - Per-key colour control from the host.
 - Upstreaming to SonixQMK.

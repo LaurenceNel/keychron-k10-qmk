@@ -109,15 +109,18 @@ def led_entry(label, r, c, x, y, w, h):
     return {"matrix": [r, c], "x": min(cx, 224), "y": min(cy, 64), "flags": 4}
 
 
-# LEDs that sit at a matrix position with no key (the indicator LEDs). They get flag 0, so
-# lighting effects never touch them and only the firmware's indicator code sets them.
-#
+# The four indicator LEDs at the top right are not on GPIO pins: they sit in the backlight's
+# LED matrix at row 0, columns 17-20, which have no key (found with the pinprobe keymap,
+# 2026-11-20). They get flag 0, so lighting effects never touch them and only the firmware's
+# indicator code in iso.c sets them.
+INDICATOR_LEDS = [(0, 17), (0, 18), (0, 19), (0, 20)]  # Num Lock, Caps Lock, Mac, Windows
+
 # With K10_PROBE_LEDS=1 in the environment, every unused matrix position gets an LED entry
-# instead, in the order the pinprobe keymap walks them. That build is for finding where the
-# indicator LEDs are; don't commit its keyboard.json.
+# instead, in the order the pinprobe keymap walks them. That build is for finding LEDs on
+# another K10 variant; don't commit its keyboard.json.
 used = {(r, c) for _, r, c, *_ in keys}
 ALL_UNUSED = [(r, c) for r in range(len(rows)) for c in range(len(cols)) if (r, c) not in used]
-EXTRA_LEDS = ALL_UNUSED if os.environ.get("K10_PROBE_LEDS") == "1" else []
+EXTRA_LEDS = ALL_UNUSED if os.environ.get("K10_PROBE_LEDS") == "1" else INDICATOR_LEDS
 
 
 def extra_led_entry(r, c):
@@ -138,7 +141,10 @@ kb = {
         "mousekey": False,
         "nkro": False,
         "rgb_matrix": True,
+        "dip_switch": True,
     },
+    # The Win/Mac slide switch. (The Cable/BT switch is on D5 and is not read.)
+    "dip_switch": {"pins": ["D4"]},
     "matrix_pins": {"cols": cols, "rows": rows},
     "usb": {"device_version": "1.0.0", "pid": "0xFE13", "vid": "0x3434"},
     "rgb_matrix": {

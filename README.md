@@ -28,6 +28,7 @@ QMK and VIA firmware for the **original Keychron K10** (2021, Sonix SN32F248B), 
 
 - All 105 keys, UK/ISO layout.
 - Per-key RGB with QMK's RGB Matrix effects.
+- The four indicator LEDs at the top right: Num Lock, Caps Lock, and Mac / Windows following the slide switch. They stay on when the backlight is toggled off.
 - VIA: remapping, three layers, lighting menu.
 - Lighting control from the PC over VIA raw HID (`tools/k10_via.py`).
 - Bootloader without opening the case: hold `Esc` while plugging in, or `Fn + Esc`.
@@ -35,8 +36,8 @@ QMK and VIA firmware for the **original Keychron K10** (2021, Sonix SN32F248B), 
 ## What doesn't (yet)
 
 - Bluetooth (not planned).
-- The Win/Mac and Cable/BT/Off slide switches are ignored.
-- The four indicator LEDs at the top right (Num Lock, Caps Lock, Mac, Windows) stay dark: their pins are not mapped yet. Caps Lock and Num Lock show by turning that key's own LED white.
+- The Win/Mac switch only moves the Mac / Windows LED. It doesn't change the keymap, and which position lights which LED is assumed, not yet checked.
+- The Cable/BT switch does nothing, except that its middle Off position cuts power.
 - ANSI layout.
 
 ## Default keymap
@@ -52,7 +53,7 @@ Standard UK ISO. The three keys right of F12 are Print Screen, Scroll Lock and "
 | F7 / F8 / F9 | Previous / play-pause / next |
 | F10 / F11 / F12 | Mute / volume down / volume up |
 | Print Screen / Scroll Lock | Snipping tool / Pause |
-| Light key | Backlight on / off |
+| Light key | Key backlight on / off (the indicator LEDs stay on) |
 | Ins / Del | Hue up / down |
 | Home / End | Brightness up / down |
 | PgUp / PgDn | Saturation up / down |
