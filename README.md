@@ -26,7 +26,7 @@ QMK and VIA firmware for the **original Keychron K10** (2021, Sonix SN32F248B), 
 
 ## What works
 
-- All 105 keys, UK/ISO layout. Seven key positions are inferred, not measured (Del, End, PgDn, numpad 7 8 9 +). They are listed in the porting notes.
+- All 105 keys, UK/ISO layout.
 - Per-key RGB with QMK's RGB Matrix effects.
 - VIA: remapping, three layers, lighting menu.
 - Lighting control from the PC over VIA raw HID (`tools/k10_via.py`).
@@ -36,7 +36,7 @@ QMK and VIA firmware for the **original Keychron K10** (2021, Sonix SN32F248B), 
 
 - Bluetooth (not planned).
 - The Win/Mac and Cable/BT/Off slide switches are ignored.
-- The dedicated Caps Lock and Num Lock indicator LEDs. The key's own LED turns white instead.
+- The four indicator LEDs at the top right (Num Lock, Caps Lock, Mac, Windows) stay dark: their pins are not mapped yet. Caps Lock and Num Lock show by turning that key's own LED white.
 - ANSI layout.
 
 ## Default keymap

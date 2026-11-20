@@ -42,7 +42,7 @@ Found with the probe firmware in `keyboards/keychron/k10/probe`, which drives on
 | Diode direction | `COL2ROW` | Confirmed |
 | LED sink pins (R, B, G per row) | `C3, C1, C0, C6, C5, C4, C9, C8, C7, C12, C11, C10, B13, C14, C13, B14, B15, D3` | Taken from the K2/K3/K4/K8 ports. Lights work on the development board; exact row and colour order not individually checked |
 | `A0-A7` | No keys. Probably the Bluetooth module (UART2 is on `A0`/`A1`) | Left as inputs |
-| Caps Lock / Num Lock indicator LEDs | Unknown | Not driven. The key's own LED turns white instead |
+| Indicator LEDs, top right (Num Lock, Caps Lock, Mac, Windows) | Unknown. With every `B` and `C` pin taken, they must be among `A0-A7`, `D4`, `D5`, `D6` | Not driven, so all four stay dark. Caps Lock and Num Lock show on the key's own LED instead |
 | Win/Mac and Cable/BT/Off switches | Unknown | Ignored |
 
 Each LED column needs its own PWM channel, and `A0-A7` share channels with `B8-B15`, which is why 21 columns land on `A8-A15, B0-B12`.
@@ -55,7 +55,7 @@ Each LED column needs its own PWM channel, and `A0-A7` share channels with `B8-B
 - Bottom row, right of space: four keys at `[5,10]` to `[5,13]`.
 - Numpad 0 at `[5,17]`, numpad `.` at `[5,19]`.
 
-Seven keys were missed in that run and are placed by inference from the C2 at row 2, columns 14-20: Del, End, PgDn, numpad 7, 8, 9 and +.
+Seven keys were missed in that run and were placed by inference from the C2 at row 2, columns 14-20: Del, End, PgDn, numpad 7, 8, 9 and +. All seven were then confirmed working on the board with the finished firmware.
 
 ## Stock firmware and going back
 
@@ -70,6 +70,6 @@ The default emulated EEPROM on this chip is 1024 bytes. Four VIA layers of a 6x2
 ## Not done yet
 
 - ANSI layout variant.
-- The dedicated indicator LEDs and the two slide switches.
+- The four indicator LEDs and the two slide switches. Plan: an input-only probe of `A0-A7`, `D4`, `D5`, `D6` while flipping the switches, to find the switch pins and rule out busy lines, before any candidate pin is driven as an output.
 - Per-key colour control from the host.
 - Upstreaming to SonixQMK.
