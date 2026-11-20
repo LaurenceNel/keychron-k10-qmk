@@ -97,6 +97,8 @@ The limit is RAM, not flash: the storage is mirrored in RAM and the chip has 8 K
 | 15 | Two-Colour Blend | Main colour and second colour |
 | 16 | Two-Colour Fade | Main colour and second colour |
 
+The two-colour effects mix red, green and blue directly, so only the two colours and the straight blend between them ever show. Mixing the hue instead passes through every colour in between (pink to teal by way of purple and blue), which read as a slow rainbow rather than two colours. The wave is a steepened sine, so most keys sit at one colour or the other.
+
 The painting is four bits per key: an index into a 16-entry palette, where index 0 is "off". That is 53 bytes for 105 keys. A free hue and saturation per key would be 210 bytes of storage and of RAM, which this chip does not have.
 
 Effect numbers depend on which built-in effects are enabled, and VIA's stock lighting menu cannot know that, nor about the keyboard's own effects. So the VIA definition carries its own lighting menu with the list from `tools/gen_k10_iso.py`, and `iso.c` has a compile-time check that the firmware's numbering still matches it.

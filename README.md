@@ -119,9 +119,10 @@ The Lighting tab's effect list comes from this file, so load the file again afte
 - Pick one of 15 colours, then click or drag across keys. The crossed-out swatch switches a key off.
 - Any of the 15 can be changed to any colour. "Halves", "Thirds" and "Left and right hand" give a quick start.
 - The painting is stored on the keyboard: it stays after unplugging and needs no program running. It shows whenever the lighting effect is "Painted (per key)", which the page selects as soon as you paint.
+- Profiles: save the current look under a name and load it back later. Profiles are kept in the browser, not on the keyboard, which holds one look at a time. Export them to a file to back them up or move them to another computer.
 - "Try without a keyboard" shows the page with nothing connected.
 
-The page and VIA's Lighting tab also set the two-colour effects. Two-Colour Wave, Blend and Fade move between the main colour and a second colour, so a wave can be pink and teal instead of a rainbow.
+The page and VIA's Lighting tab also set the two-colour effects. Two-Colour Wave, Blend and Fade use the main colour and a second colour, so a wave can be bands of pink and teal instead of a rainbow. The page's picture of the keyboard previews them as you change the colours and speed.
 
 The palette is 15 colours because the chip is nearly out of memory: a free colour for each of 105 keys does not fit.
 
