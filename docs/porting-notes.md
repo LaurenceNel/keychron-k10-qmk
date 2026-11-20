@@ -116,7 +116,7 @@ The settings are read and written on VIA's custom channel (channel 0), with the 
 | 5 | 0-3 | Reaction to typing: nothing, droplet, key glow, wide glow |
 | 6 | hue, sat | Colour of the reaction |
 
-Hue and saturation are 0-255, as everywhere in QMK. Changes take effect at once and are stored when the save command arrives. Tried on the board through `tools/painter`: painting, the palette, and the droplet reaction.
+Hue and saturation are 0-255, as everywhere in QMK. Changes take effect at once and are stored when the save command arrives. Tried on the board through `tools/painter`: painting, the palette, the three two-colour effects and all three reactions.
 
 The VIA definition was checked by loading it in usevia.app's Design tab, which runs VIA's own validation: it loads with no errors. Because the lighting menu is the keyboard's own, the definition names its lighting keycodes explicitly (`qmk_rgb_matrix_keycodes`). With the generic `qmk_lighting`, VIA cannot tell which kind of lighting the board has and lists the underglow keycodes as well.
 
