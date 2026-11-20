@@ -20,29 +20,34 @@ QMK and VIA firmware for the **original Keychron K10** (2021, Sonix SN32F248B), 
 
 - **Bluetooth stops working.** The Bluetooth module is a separate closed system. This firmware is USB only.
 - **It may be one-way.** Keychron publishes stock K10 firmware for the soldered Gateron versions only. For the ISO hot-swap board there is no known stock image, so there may be no way back to stock (and Bluetooth).
-- **Bricking is unlikely.** The chip's bootloader is in ROM, so a bad flash can always be redone by shorting the BOOT pads.
-- **You need to open the case once** to short the BOOT pads for the first flash. Later flashes don't.
+- **Bricking is unlikely.** The chip's bootloader is in ROM, so a bad flash can always be redone with the boot button.
+- **You don't need to open the case.** The first flash needs the spacebar keycap off, to reach the boot button underneath it. Later flashes need nothing removed.
 - This is unofficial and comes with no warranty. It is not affiliated with Keychron.
 
 ## What works
 
 - All 105 keys, UK/ISO layout.
 - Per-key RGB with QMK's RGB Matrix effects.
+- The Win/Mac slide switch: a Windows layout and a Mac layout, each with its own Fn layer.
 - The four indicator LEDs at the top right: Num Lock, Caps Lock, and Mac / Windows following the slide switch. They stay on when the backlight is toggled off.
-- VIA: remapping, three layers, lighting menu.
+- VIA: remapping, four layers, lighting menu.
 - Lighting control from the PC over VIA raw HID (`tools/k10_via.py`).
 - Bootloader without opening the case: hold `Esc` while plugging in, or `Fn + Esc`.
 
 ## What doesn't (yet)
 
 - Bluetooth (not planned).
-- The Win/Mac switch only moves the Mac / Windows LED. It doesn't change the keymap, and which position lights which LED is assumed, not yet checked.
+- The Mac layout has not been tried on a Mac yet.
 - The Cable/BT switch does nothing, except that its middle Off position cuts power.
 - ANSI layout.
 
 ## Default keymap
 
-Standard UK ISO. The three keys right of F12 are Print Screen, Scroll Lock and "next lighting effect". Right of space: Alt, Win, Fn, Ctrl.
+The Win/Mac slide switch picks the layout, and the Mac or Windows LED shows which one is active. Flip it at any time; nothing needs replugging.
+
+### Windows
+
+Standard UK ISO. The top row is F1 to F12. The three keys right of F12 are Print Screen, Scroll Lock and "next lighting effect". Bottom row: Ctrl, Win, Alt, space, Alt, Win, Fn, Ctrl.
 
 | Fn + | Does |
 |---|---|
@@ -60,11 +65,28 @@ Standard UK ISO. The three keys right of F12 are Print Screen, Scroll Lock and "
 | Up / Down | Effect speed up / down |
 | Left / Right | Previous / next effect |
 
+### Mac
+
+The same keys, with the differences Keychron's own QMK boards make:
+
+- Bottom row: Control, Option, Command, space, Command, Option, Fn, Control.
+- The top row does the media and system functions below. Fn + top row gives F1 to F12.
+- The key right of F12 takes a screenshot of an area you select (Shift-Command-4); with Fn, of the whole screen (Shift-Command-3). The key after it opens Spotlight (Command-Space).
+- Fn + Esc, the light key, and the lighting keys on the navigation cluster and arrows work as on Windows.
+
+| Key | Does |
+|---|---|
+| F1 / F2 | Screen brightness down / up |
+| F3 / F4 | Mission Control / Launchpad |
+| F5 / F6 | Backlight brightness down / up |
+| F7 / F8 / F9 | Previous / play-pause / next |
+| F10 / F11 / F12 | Mute / volume down / volume up |
+
 ## Flashing
 
 1. Get `keychron_k10_rgb_iso_via.bin` (or `..._default.bin` without VIA) from the releases, or build it.
 2. Enter the bootloader:
-   - **From stock firmware:** unplug USB, disconnect the battery, bridge the BOOT and GND pads near the spacebar with tweezers while plugging USB in.
+   - **From stock firmware:** set the mode switch to Cable and unplug USB. Pull the spacebar keycap off: the boot button is on the circuit board underneath. Hold it down while plugging USB in, then let go. The keys and lights stay dead until you flash.
    - **From this firmware:** hold `Esc` while plugging in, or press `Fn + Esc`.
 3. Flash with [Sonix Flasher](https://github.com/SonixQMK/sonix-flasher/releases/latest): the detected `SN32F24xB` device, QMK offset `0x00`, "Flash QMK...".
 4. Unplug and replug.
@@ -72,6 +94,17 @@ Standard UK ISO. The three keys right of F12 are Print Screen, Scroll Lock and "
 ### Using VIA
 
 Open [usevia.app](https://usevia.app) in Chrome or Edge, turn on "Show Design tab" in Settings, and load `keyboards/keychron/k10/rgb/via_json/k10_iso.json` in the Design tab.
+
+VIA shows four layers:
+
+| Layer | Is |
+|---|---|
+| 0 | Windows |
+| 1 | Windows, with Fn held |
+| 2 | Mac |
+| 3 | Mac, with Fn held |
+
+Remap the pair that matches your switch position. Flashing new firmware resets what you set in VIA.
 
 ## Lighting from the PC
 

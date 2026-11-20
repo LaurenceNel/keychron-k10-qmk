@@ -16,11 +16,11 @@ Make example for this keyboard (after setting up your build environment):
 * Key columns: `A8-A15, B0-B12` (21), diodes `COL2ROW`
 * Confirmed with the probe firmware in `keyboards/keychron/k10/probe`.
 * Indicator LEDs (Num Lock, Caps Lock, Mac, Windows): in the LED matrix at row 0, columns 17-20, positions with no key.
-* Win/Mac switch: `D4`. Cable/BT switch: `D5` (not used).
+* Win/Mac switch: `D4`. It selects the base layer: 0 for Windows, 2 for Mac. Cable/BT switch: `D5` (not used).
 * LED sink pins: taken from the K2/K3/K4/K8 ports. See `config.h`.
 
 ## How to flash
 
-1. From stock firmware: short the BOOT pads under the spacebar while plugging in the USB cable.
+1. From stock firmware: pull the spacebar keycap off and hold the boot button underneath while plugging in the USB cable.
    From this firmware: hold `Esc` while plugging in (bootmagic), or press `Fn + Esc`.
 2. Flash the `.bin` with [Sonix Flasher](https://github.com/SonixQMK/sonix-flasher/releases/latest), device `SN32F24xB`, QMK offset `0x00`.

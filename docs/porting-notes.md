@@ -20,15 +20,16 @@ This is **not** the "K10 QMK (Version 2)", which ships with QMK on a Westberry W
 
 The chip on this board has no visible marking. Two checks that do not need one:
 
-1. Count the legs on one side. The SN32F248B is the 64-pin part (16 per side). The 48-pin sibling is the SN32F247B.
-2. Put the board in bootloader mode (below) and read its USB ID. `0C45:7040` is the SN32F24xB bootloader. Entering the bootloader changes nothing on the board.
+1. Put the board in bootloader mode (below) and read its USB ID. `0C45:7040` is the SN32F24xB bootloader. Entering the bootloader changes nothing on the board, and it only needs the spacebar keycap off.
+2. Count the legs on one side. The SN32F248B is the 64-pin part (16 per side). The 48-pin sibling is the SN32F247B. This one does need the case open.
 
 ## Bootloader mode
 
 The SN32F248B's bootloader is in ROM and cannot be overwritten. Pulling the BOOT pin (`P2.2`, chip pin 3) low at power-on always enters it.
 
-- Unplug USB and disconnect the battery.
-- Bridge the BOOT and GND pads (near the spacebar on Keychron boards) with tweezers, plug in USB while holding them, then let go.
+- The board has a boot button for this under the spacebar. Pull the spacebar keycap off to reach it; the case stays closed.
+- Set the mode switch to Cable and unplug USB, so the board is unpowered.
+- Hold the button, plug in USB, then let go.
 - Keys and lights stay dead while it waits for firmware. Unplug and replug to boot normally.
 
 ## Wiring
@@ -42,7 +43,7 @@ Found with the probe firmware in `keyboards/keychron/k10/probe`, which drives on
 | Diode direction | `COL2ROW` | Confirmed |
 | LED sink pins (R, B, G per row) | `C3, C1, C0, C6, C5, C4, C9, C8, C7, C12, C11, C10, B13, C14, C13, B14, B15, D3` | Taken from the K2/K3/K4/K8 ports. Lights work on the development board; exact row and colour order not individually checked |
 | Indicator LEDs, top right | In the LED matrix, not on GPIO: row 0, columns 17, 18, 19, 20 = Num Lock, Caps Lock, Mac, Windows | Confirmed by lighting each spare matrix position in turn |
-| Win/Mac switch | `D4` | Confirmed. Which level means Mac is assumed (low) |
+| Win/Mac switch | `D4`, low in the Mac position | Confirmed. Lights the Mac or Windows LED and selects the base layer |
 | Cable/BT switch | `D5`: low on Cable, high on BT. The middle Off position cuts power, even on USB | Seen, not used |
 | `A0`, `A1`, `A3`, `A4` | Bluetooth module lines: they change state once the module has been powered | Left as inputs. Never drive them |
 | `A2`, `A5`, `A6`, `A7`, `D6` | No keys, and driving each high lights nothing | Left as inputs |
@@ -71,13 +72,21 @@ In `keyboard.json` these four carry LED flag 0, so effects skip them. `iso.c` se
 - The chip is read-protected over USB. Dumping your own stock firmware needs an ST-Link on the SWD pins and SonixQMK's `sonix_dumper`.
 - So on this variant, flashing QMK may be one-way. Bricking is unlikely (the bootloader is in ROM), but Bluetooth is gone unless you find the right stock image.
 
+## Win/Mac layers
+
+Done the way the other Keychron Sonix ports do it: the slide switch is a QMK DIP switch, and `iso.c` sets the default layer from it. Layer 0 is Windows and layer 2 is Mac (`K10_WIN_BASE_LAYER` and `K10_MAC_BASE_LAYER` in `config.h`), each followed by its Fn layer. A keymap with fewer layers still types in the Mac position, because QMK falls back to layer 0 for keys an active layer does not define.
+
+The Mac layers copy Keychron's own QMK boards: Option and Command swapped, media keys on the top row, F1 to F12 behind Fn. They have not been tried on a Mac yet.
+
 ## Settings storage
 
-The default emulated EEPROM on this chip is 1024 bytes. Four VIA layers of a 6x21 matrix need 1008 bytes before anything else, so the VIA keymap uses three layers.
+The default emulated EEPROM on this chip is 1024 bytes. Four VIA layers of a 6x21 matrix need 1008 bytes before anything else, which does not fit, so `config.h` raises it to 1280 (`WEAR_LEVELING_LOGICAL_SIZE`, with twice that as backing flash). That leaves over 200 bytes for VIA macros, the same as three layers had in 1024.
+
+The limit is RAM, not flash: the storage is mirrored in RAM and the chip has 8 KB. After this change the VIA build has 224 bytes of RAM unused, which is not enough for a fifth layer (252 bytes more). Flash is fine: the firmware ends near 38 KB of 64 KB.
 
 ## Not done yet
 
 - ANSI layout variant.
-- Confirming which Win/Mac switch position reads low, and deciding whether Mac mode should change the keymap.
+- Trying the Mac layout on a Mac.
 - Per-key colour control from the host.
 - Upstreaming to SonixQMK.

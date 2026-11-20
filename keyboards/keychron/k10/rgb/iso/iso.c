@@ -17,8 +17,9 @@
 #endif
 
 /*
- * Win/Mac slide switch on D4. It only drives the Mac / Windows LEDs for now.
- * Which level means Mac is assumed (low), not yet confirmed on hardware.
+ * Win/Mac slide switch on D4, low in the Mac position. It lights the Mac or Windows
+ * LED and picks the base layer: K10_MAC_BASE_LAYER or K10_WIN_BASE_LAYER (config.h).
+ * A keymap that wants neither can return false from dip_switch_update_user().
  */
 static bool mac_mode = false;
 
@@ -29,6 +30,7 @@ bool dip_switch_update_kb(uint8_t index, bool active) {
     }
     if (index == 0) {
         mac_mode = active;
+        default_layer_set((layer_state_t)1 << (mac_mode ? K10_MAC_BASE_LAYER : K10_WIN_BASE_LAYER));
     }
     return true;
 }
