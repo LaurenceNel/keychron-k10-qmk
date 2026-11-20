@@ -8,6 +8,7 @@ not pressed during that run and are filled in from the Keychron C2 layout, which
 matched. See docs/porting-notes.md.
 """
 import json
+import os
 import pathlib
 import sys
 
@@ -108,6 +109,21 @@ def led_entry(label, r, c, x, y, w, h):
     return {"matrix": [r, c], "x": min(cx, 224), "y": min(cy, 64), "flags": 4}
 
 
+# LEDs that sit at a matrix position with no key (the indicator LEDs). They get flag 0, so
+# lighting effects never touch them and only the firmware's indicator code sets them.
+#
+# With K10_PROBE_LEDS=1 in the environment, every unused matrix position gets an LED entry
+# instead, in the order the pinprobe keymap walks them. That build is for finding where the
+# indicator LEDs are; don't commit its keyboard.json.
+used = {(r, c) for _, r, c, *_ in keys}
+ALL_UNUSED = [(r, c) for r in range(len(rows)) for c in range(len(cols)) if (r, c) not in used]
+EXTRA_LEDS = ALL_UNUSED if os.environ.get("K10_PROBE_LEDS") == "1" else []
+
+
+def extra_led_entry(r, c):
+    return {"matrix": [r, c], "x": round(c * 224 / (len(cols) - 1)), "y": round(r * 64 / (len(rows) - 1)), "flags": 0}
+
+
 kb = {
     "manufacturer": "Keychron",
     "keyboard_name": "K10 RGB",
@@ -141,7 +157,7 @@ kb = {
             "splash": True,
             "multisplash": True,
         },
-        "layout": [led_entry(*key) for key in keys],
+        "layout": [led_entry(*key) for key in keys] + [extra_led_entry(r, c) for r, c in EXTRA_LEDS],
     },
     "layouts": {"LAYOUT_iso": {"layout": [layout_entry(*key) for key in keys]}},
 }

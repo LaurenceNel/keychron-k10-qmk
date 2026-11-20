@@ -7,6 +7,8 @@ Needs the `pinprobe` build on the keyboard (keychron/k10/rgb/iso:pinprobe) and `
     python tools/k10_pinprobe.py --only walk --exclude D5,D6
     python tools/k10_pinprobe.py --only walk --pins A2,A5,A6,A7   # drive only these, high
     python tools/k10_pinprobe.py --only walk --low A3,A4     # drive these LOW instead (active-low LEDs)
+    python tools/k10_pinprobe.py --leds top                  # test the 5 spare top-row positions of the backlight matrix
+    python tools/k10_pinprobe.py --leds all                  # test all 21 spare positions
 
 Listen (30 s): you slide the two switches back and forth; the script notes which pins react.
 Walk: each remaining pin is driven high for 3 seconds, one at a time. While a pin is on, the
@@ -33,6 +35,13 @@ RGB_BRIGHTNESS, RGB_EFFECT = 1, 2
 
 PINS = ["A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "D4", "D5", "D6"]
 FKEY = {p: f"F{i + 1}" for i, p in enumerate(PINS)}
+
+# Matrix positions with no key, in the order the pinprobe keymap knows them (PV_LEDTEST).
+# The first five are in the top row; 1-4 of those sit above the numpad.
+PV_LEDTEST = 5
+SPARE_LEDS = [(0, 13), (0, 17), (0, 18), (0, 19), (0, 20), (2, 13), (3, 14), (3, 15), (3, 16), (3, 20), (4, 12),
+              (4, 14), (4, 16), (5, 3), (5, 4), (5, 5), (5, 7), (5, 8), (5, 9), (5, 18), (5, 20)]
+DISPLAY_KEY = [f"F{i + 1}" for i in range(12)] + [f"number key {i + 1}" for i in range(9)]
 
 
 def open_device():
@@ -159,8 +168,38 @@ def walk(dev, pins, level, seconds):
     return driven
 
 
+def led_walk(dev, indexes, seconds):
+    print(f"\nLED WALK: lighting {len(indexes)} spare position(s) in the backlight matrix, {seconds:g} s each.")
+    print("  The keyboard goes dark except ONE key, which shows which position is being tested.")
+    print("  Watch the four LEDs at the top right and note which key is lit when each comes on.\n")
+    brightness, effect = rgb_get(dev, RGB_BRIGHTNESS), rgb_get(dev, RGB_EFFECT)
+    if effect == 0:
+        rgb_put(dev, RGB_EFFECT, 1)
+    if brightness < 80:
+        rgb_put(dev, RGB_BRIGHTNESS, 120)
+    for i in (3, 2, 1):
+        print(f"  starting in {i}...")
+        time.sleep(1)
+    tested = []
+    try:
+        for i in indexes:
+            reply = xfer(dev, [SET, CH_CUSTOM, PV_LEDTEST, i, round(seconds * 10)])
+            if reply[0] == UNHANDLED:
+                sys.exit("The keyboard rejected the LED test. Flash the newer pinprobe build.")
+            r, c = SPARE_LEDS[i]
+            print(f"  {DISPLAY_KEY[i]:<12} lit   testing matrix position row {r}, column {c}")
+            tested.append({"index": i, "row": r, "col": c, "display": DISPLAY_KEY[i]})
+            time.sleep(seconds + 1.0)
+    finally:
+        time.sleep(0.5)
+        rgb_put(dev, RGB_BRIGHTNESS, brightness)
+        rgb_put(dev, RGB_EFFECT, effect)
+    return tested
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--leds", choices=["top", "all"], help="test spare backlight-matrix positions instead: the 5 in the top row, or all 21")
     ap.add_argument("--only", choices=["listen", "walk"])
     ap.add_argument("--listen-seconds", type=float, default=30)
     ap.add_argument("--pulse-seconds", type=float, default=3.0)
@@ -179,6 +218,15 @@ def main():
             sys.exit(f"unknown pin {p}; choose from {', '.join(PINS)}")
 
     dev = open_device()
+    if args.leds:
+        probe_get(dev, PV_LEVELS)  # exits with a clear message if this is not the pinprobe firmware
+        tested = led_walk(dev, range(5) if args.leds == "top" else range(len(SPARE_LEDS)), args.pulse_seconds)
+        print("\nDone. Tell Claude which key was lit when each of the four LEDs came on (or that none did).")
+        path = pathlib.Path(args.out).with_name("pinprobe-leds.json")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"tested": tested}, indent=2), encoding="utf-8")
+        return
+
     out = {"pins": PINS, "fkeys": FKEY}
     start_up, start_float = probe_get(dev, PV_LEVELS), probe_get(dev, PV_FLOAT)
     out["start"] = {p: {"pullup": u, "float": f} for p, u, f in zip(PINS, start_up, start_float)}

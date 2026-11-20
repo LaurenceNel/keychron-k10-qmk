@@ -27,7 +27,22 @@ enum probe_values {
     PV_TOGGLES = 2, // get: one byte per pin, changes since last read (saturates at 255)
     PV_FLOAT   = 3, // get: one byte per pin, level with the pull-up off
     PV_PULSE   = 4, // set: [pin index, level, duration in 100 ms units (1-30), 0xA5 to allow level 0]
+    PV_LEDTEST = 5, // set: [spare LED index, duration in 100 ms units (1-30)]
 };
+
+// Second theory for the indicator LEDs: they are not on GPIO pins at all but sit in the
+// backlight's own LED matrix, at positions that have no key. Build with K10_PROBE_LEDS=1
+// (see tools/gen_k10_iso.py) so every unused position has an LED entry, in this order.
+// While one is tested, everything goes dark except that position and one "display" key:
+// F1-F12 for the first twelve, then the number keys 1-9.
+static const uint8_t spare_leds[][2] = {
+    {0, 13}, {0, 17}, {0, 18}, {0, 19}, {0, 20}, {2, 13}, {3, 14}, {3, 15}, {3, 16}, {3, 20}, {4, 12},
+    {4, 14}, {4, 16}, {5, 3},  {5, 4},  {5, 5},  {5, 7},  {5, 8},  {5, 9},  {5, 18}, {5, 20},
+};
+#define SPARE_COUNT (sizeof(spare_leds) / sizeof(spare_leds[0]))
+
+static int8_t   led_test = -1;
+static uint32_t led_test_until;
 
 static uint8_t  toggles[PROBE_COUNT];
 static uint8_t  last_level[PROBE_COUNT];
@@ -58,6 +73,9 @@ void housekeeping_task_user(void) {
         wait_us(200);
         last_level[pulse_pin] = gpio_read_pin(probe_pins[pulse_pin]);
         pulse_pin             = -1;
+    }
+    if (led_test >= 0 && timer_expired32(timer_read32(), led_test_until)) {
+        led_test = -1;
     }
 }
 
@@ -114,6 +132,15 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
         pulse_pin   = index;
         pulse_until = timer_read32() + (uint32_t)duration * 100;
         return;
+    } else if (*command_id == id_custom_set_value && value_id == PV_LEDTEST) {
+        uint8_t index = value[0], duration = value[1];
+        if (index >= SPARE_COUNT || duration < 1 || duration > 30 || pulse_pin >= 0) {
+            *command_id = id_unhandled;
+            return;
+        }
+        led_test       = index;
+        led_test_until = timer_read32() + (uint32_t)duration * 100;
+        return;
     } else if (*command_id == id_custom_save) {
         return;
     }
@@ -121,14 +148,24 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
     *command_id = id_unhandled;
 }
 
-// While a pin is driven, show only the F-key with its number.
+// While a pin is driven or a spare LED is tested, show only the key with its number.
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
-    if (pulse_pin < 0) {
+    if (pulse_pin < 0 && led_test < 0) {
         return true;
     }
     for (uint8_t i = led_min; i < led_max; i++) {
         rgb_matrix_set_color(i, 0, 0, 0);
     }
-    RGB_MATRIX_INDICATOR_SET_COLOR(g_led_config.matrix_co[0][1 + pulse_pin], 255, 255, 255);
+    if (pulse_pin >= 0) {
+        RGB_MATRIX_INDICATOR_SET_COLOR(g_led_config.matrix_co[0][1 + pulse_pin], 255, 255, 255);
+    } else {
+        // Display key: F1-F12 for 0-11, number keys 1-9 for 12-20.
+        uint8_t display = led_test < 12 ? g_led_config.matrix_co[0][1 + led_test] : g_led_config.matrix_co[1][1 + (led_test - 12)];
+        uint8_t spare   = g_led_config.matrix_co[spare_leds[led_test][0]][spare_leds[led_test][1]];
+        RGB_MATRIX_INDICATOR_SET_COLOR(display, 255, 255, 255);
+        if (spare != NO_LED) {
+            RGB_MATRIX_INDICATOR_SET_COLOR(spare, 255, 255, 255);
+        }
+    }
     return false;
 }
