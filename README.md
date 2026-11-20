@@ -12,7 +12,8 @@ QMK and VIA firmware for the **original Keychron K10** (2021, Sonix SN32F248B), 
 | USB ID on stock firmware | `05AC:0250` | `3434:xxxx` |
 | Main chip | Sonix SN32F248B (64 pins, may be unmarked) | Westberry WB32, STM32 |
 | Layout | ISO | ANSI (not added yet) |
-| Backlight | RGB | White (different chip, SN32F260) |
+| Backlight | RGB | White (not covered) |
+| Switches | Hot-swap | Soldered: untested, see "Before you flash" |
 
 `docs/porting-notes.md` has the PCB markings and how to confirm the chip.
 
@@ -20,6 +21,7 @@ QMK and VIA firmware for the **original Keychron K10** (2021, Sonix SN32F248B), 
 
 - **Bluetooth stops working.** The Bluetooth module is a separate closed system. This firmware is USB only.
 - **It may be one-way.** Keychron publishes stock K10 firmware for the soldered Gateron versions only. For the ISO hot-swap board there is no known stock image, so there may be no way back to stock (and Bluetooth).
+- **Only the hot-swap board is tested.** Keychron ships separate stock firmware for the soldered-switch K10 and warns against putting it on a hot-swap board, so the two may be wired differently. On a soldered board, flash the wiring probe first and compare what it reports with `docs/porting-notes.md`.
 - **Bricking is unlikely.** The chip's bootloader is in ROM, so a bad flash can always be redone with the boot button.
 - **You don't need to open the case.** The first flash needs the spacebar keycap off, to reach the boot button underneath it. Later flashes need nothing removed.
 - This is unofficial and comes with no warranty. It is not affiliated with Keychron.
@@ -134,10 +136,11 @@ On Windows with [QMK MSYS](https://msys.qmk.fm), `scripts\build.ps1` does the co
 ## Layout of this repo
 
 ```
-keyboards/keychron/k10/rgb/iso/     the keyboard: definition, config, default and via keymaps
+keyboards/keychron/k10/rgb/iso/     the keyboard: definition, config, default and via keymaps,
+                                    plus the pinprobe keymap used to find the indicator LEDs
 keyboards/keychron/k10/rgb/via_json VIA definition
 keyboards/keychron/k10/probe/       wiring-probe firmware used to map the board
-tools/                              layout generator, PC lighting control
+tools/                              layout generator, PC lighting control, pin-probe script
 scripts/build.ps1                   Windows build helper
 docs/porting-notes.md               hardware facts, how it was mapped, what is unknown
 ```

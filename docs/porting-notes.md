@@ -38,10 +38,10 @@ Found with the probe firmware in `keyboards/keychron/k10/probe`, which drives on
 
 | | Pins | Status |
 |---|---|---|
-| Key rows | `C15, D11, D10, D9, D8, D7` | Confirmed. The same on every Keychron Sonix board |
+| Key rows | `C15, D11, D10, D9, D8, D7` | Confirmed. The same as the K2, K3, K4 and C1 ports |
 | Key columns | `A8-A15, B0-B12` (21) | Confirmed |
 | Diode direction | `COL2ROW` | Confirmed |
-| LED sink pins (R, B, G per row) | `C3, C1, C0, C6, C5, C4, C9, C8, C7, C12, C11, C10, B13, C14, C13, B14, B15, D3` | Taken from the K2/K3/K4/K8 ports. Lights work on the development board; exact row and colour order not individually checked |
+| LED sink pins (R, B, G per row) | `C3, C1, C0, C6, C5, C4, C9, C8, C7, C12, C11, C10, B13, C14, C13, B14, B15, D3` | Taken from the K2/K3/K4/K8 ports. Every key lights and colours are right on the development board. Single keys were lit one at a time on the top two rows only |
 | Indicator LEDs, top right | In the LED matrix, not on GPIO: row 0, columns 17, 18, 19, 20 = Num Lock, Caps Lock, Mac, Windows | Confirmed by lighting each spare matrix position in turn |
 | Win/Mac switch | `D4`, low in the Mac position | Confirmed. Lights the Mac or Windows LED and selects the base layer |
 | Cable/BT switch | `D5`: low on Cable, high on BT. The middle Off position cuts power, even on USB | Seen, not used |
@@ -80,7 +80,7 @@ The Mac layers copy Keychron's own QMK boards: Option and Command swapped, media
 
 ## Settings storage
 
-The default emulated EEPROM on this chip is 1024 bytes. Four VIA layers of a 6x21 matrix need 1008 bytes before anything else, which does not fit, so `config.h` raises it to 1280 (`WEAR_LEVELING_LOGICAL_SIZE`, with twice that as backing flash). That leaves over 200 bytes for VIA macros, the same as three layers had in 1024.
+The default emulated EEPROM on this chip is 1024 bytes. Four VIA layers of a 6x21 matrix need 1008 bytes before anything else, which does not fit, so `config.h` raises it to 1280 (`WEAR_LEVELING_LOGICAL_SIZE`, with twice that as backing flash). That leaves 231 bytes for VIA macros, about what three layers had in 1024. Checked on the board by reading the stored keymap back over VIA: four layers, and all 504 keycodes match the build.
 
 The limit is RAM, not flash: the storage is mirrored in RAM and the chip has 8 KB. After this change the VIA build has 224 bytes of RAM unused, which is not enough for a fifth layer (252 bytes more). Flash is fine: the firmware ends near 38 KB of 64 KB.
 
