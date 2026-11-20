@@ -82,7 +82,35 @@ The Mac layers copy Keychron's own QMK boards: Option and Command swapped, media
 
 The default emulated EEPROM on this chip is 1024 bytes. Four VIA layers of a 6x21 matrix need 1008 bytes before anything else, which does not fit, so `config.h` raises it to 1280 (`WEAR_LEVELING_LOGICAL_SIZE`, with twice that as backing flash). That leaves 231 bytes for VIA macros, about what three layers had in 1024. Checked on the board by reading the stored keymap back over VIA: four layers, and all 504 keycodes match the build.
 
-The limit is RAM, not flash: the storage is mirrored in RAM and the chip has 8 KB. After this change the VIA build has 224 bytes of RAM unused, which is not enough for a fifth layer (252 bytes more). Flash is fine: the firmware ends near 38 KB of 64 KB.
+The limit is RAM, not flash: the storage is mirrored in RAM and the chip has 8 KB. With four layers the VIA build had 224 bytes of RAM unused, which is not enough for a fifth layer (252 bytes more). Flash is fine: the firmware ends near 40 KB of 64 KB.
+
+88 of the 1280 bytes hold the keyboard's own lighting settings (below), which leaves 143 for VIA macros. Those settings also take 88 bytes of RAM, so the VIA build now has 136 bytes unused.
+
+## The keyboard's own lighting effects
+
+`rgb_matrix_kb.inc` adds four effects after QMK's built-in ones:
+
+| Number | Effect | Uses |
+|---|---|---|
+| 13 | Painted (per key) | A palette index for every key |
+| 14 | Two-Colour Wave | Main colour and second colour |
+| 15 | Two-Colour Blend | Main colour and second colour |
+| 16 | Two-Colour Fade | Main colour and second colour |
+
+The painting is four bits per key: an index into a 16-entry palette, where index 0 is "off". That is 53 bytes for 105 keys. A free hue and saturation per key would be 210 bytes of storage and of RAM, which this chip does not have.
+
+Effect numbers depend on which built-in effects are enabled, and VIA's stock lighting menu cannot know that, nor about the keyboard's own effects. So the VIA definition carries its own lighting menu with the list from `tools/gen_k10_iso.py`, and `iso.c` has a compile-time check that the firmware's numbering still matches it.
+
+The settings are read and written on VIA's custom channel (channel 0), with the usual get (`0x08`), set (`0x07`) and save (`0x09`) commands. `tools/painter` and VIA's Lighting tab both use this:
+
+| Value | Data | Meaning |
+|---|---|---|
+| 1 | hue, sat | Second colour of the two-colour effects |
+| 2 | index 1-15, hue, sat | One palette colour |
+| 3 | first byte, byte count (up to 27), bytes | The painting: four bits per key in LED order, low half of each byte first |
+| 4 | none (set only) | Back to the default palette and painting |
+
+Hue and saturation are 0-255, as everywhere in QMK. Changes take effect at once and are stored when the save command arrives. Not tried on the board yet.
 
 ## Not done yet
 

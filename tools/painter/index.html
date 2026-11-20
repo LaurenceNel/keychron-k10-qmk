@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K10 Painter</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f4f1; --panel: #ffffff; --text: #1d1d1f; --muted: #62626a; --line: #d6d6d0;
+    --key-off: #c9c9c4; --accent: #0b6b74; --danger: #a3261c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17181b; --panel: #212327; --text: #ececec; --muted: #a0a0a8; --line: #383a40; --key-off: #2c2e33; --accent: #58c4cf; --danger: #ff8a7d; }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header, main { max-width: 1120px; margin: 0 auto; padding: 16px 20px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 14px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .spacer { flex: 1; }
+  #status { color: var(--muted); }
+  #status.error { color: var(--danger); }
+  button, select { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .hint { color: var(--muted); margin: 10px 0 0; }
+
+  #palette { display: flex; flex-wrap: wrap; gap: 8px; }
+  .swatch { width: 40px; height: 40px; border-radius: 8px; border: 2px solid var(--line); padding: 0; position: relative; }
+  .swatch.selected { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .swatch.off { background: var(--key-off); }
+  .swatch.off::after { content: ""; position: absolute; left: 4px; right: 4px; top: 50%; border-top: 2px solid var(--danger); transform: rotate(-45deg); }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-top: 12px; }
+  .row label { display: flex; align-items: center; gap: 8px; }
+  input[type=color] { width: 44px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
+  input[type=range] { width: 160px; }
+
+  #board-wrap { overflow-x: auto; }
+  #board { position: relative; touch-action: none; user-select: none; margin: 0 auto; }
+  .key { position: absolute; border-radius: 5px; background: var(--key-off); border: 1px solid rgba(0, 0, 0, .25); font-size: 10px; display: flex; align-items: flex-start; padding: 3px 4px; overflow: hidden; cursor: crosshair; color: var(--muted); }
+  .key.lit { color: #111; }
+  .key.lit.on-dark { color: #fff; }
+  body.disabled #board, body.disabled #palette, body.disabled .needs-link { opacity: .45; pointer-events: none; }
+</style>
+</head>
+<body class="disabled">
+<header>
+  <h1>K10 Painter</h1>
+  <span id="status">Not connected.</span>
+  <span class="spacer"></span>
+  <button id="connect" class="primary">Connect keyboard</button>
+  <button id="demo">Try without a keyboard</button>
+</header>
+
+<main>
+  <section>
+    <h2>Colours</h2>
+    <div id="palette"></div>
+    <div class="row needs-link">
+      <label>Change the selected colour <input type="color" id="swatch-color"></label>
+      <span class="hint" style="margin:0">Up to 15 colours can be on the keyboard at once. The crossed-out one switches a key off.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Keyboard</h2>
+    <div id="board-wrap"><div id="board"></div></div>
+    <div class="row needs-link">
+      <button id="fill">Fill all keys</button>
+      <button id="halves" title="Left half in the first colour, right half in the second">Halves</button>
+      <button id="thirds" title="The first three colours, a third of the board each">Thirds</button>
+      <button id="hands" title="Split between the T/G/B and Y/H/N keys">Left and right hand</button>
+      <span class="spacer"></span>
+      <button id="reset">Reset to defaults</button>
+    </div>
+    <p class="hint">Pick a colour, then click or drag across keys. Right-click a key to pick up its colour. Every change goes to the keyboard straight away and is stored on it about a second later, so the painting stays after you unplug.</p>
+  </section>
+
+  <section class="needs-link">
+    <h2>Lighting</h2>
+    <div class="row" style="margin-top:0">
+      <label>Effect <select id="effect"></select></label>
+      <label>Brightness <input type="range" id="brightness" min="0" max="255"></label>
+      <label id="speed-row">Speed <input type="range" id="speed" min="0" max="255"></label>
+      <label id="color-row">Colour <input type="color" id="color"></label>
+      <label id="color2-row">Second colour <input type="color" id="color2"></label>
+    </div>
+    <p class="hint">The painting shows when the effect is "Painted (per key)". The two-colour effects move between the colour and the second colour. The same settings are in VIA's Lighting tab.</p>
+  </section>
+</main>
+
+<script src="layout.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  // ---- Protocol: VIA raw HID, as answered by the K10 firmware (keyboards/keychron/k10/rgb/iso/iso.c) ----
+  const VID = 0x3434, PID = 0xFE13, USAGE_PAGE = 0xFF60, USAGE = 0x61;
+  const CMD = { protocol: 0x01, set: 0x07, get: 0x08, save: 0x09, unhandled: 0xFF };
+  const CH = { keyboard: 0, rgb: 3 };
+  const RGB = { brightness: 1, effect: 2, speed: 3, color: 4 };
+  const KB = { color2: 1, palette: 2, paint: 3, reset: 4 };
+  const PACKET = 32, CHUNK = 27;
+
+  const L = window.K10_LAYOUT;
+  const KEYS = L.keys.length;
+  const PAINT_BYTES = Math.ceil(KEYS / 2);
+  const PALETTE = 16;
+
+  function packPaint(paint) {
+    const out = new Uint8Array(PAINT_BYTES);
+    paint.forEach((index, led) => { out[led >> 1] |= (led & 1) ? (index << 4) : (index & 0x0F); });
+    return out;
+  }
+  function unpackPaint(bytes) {
+    const paint = new Uint8Array(KEYS);
+    for (let led = 0; led < KEYS; led++) paint[led] = (led & 1) ? (bytes[led >> 1] >> 4) : (bytes[led >> 1] & 0x0F);
+    return paint;
+  }
+
+  class Rejected extends Error {}
+
+  // One request at a time; replies are matched on the bytes the keyboard echoes back, so
+  // another program talking to the keyboard at the same moment cannot be mistaken for ours.
+  class HidLink {
+    constructor(device) {
+      this.device = device;
+      this.queue = Promise.resolve();
+      this.waiting = null;
+      device.addEventListener('inputreport', (e) => {
+        const data = new Uint8Array(e.data.buffer, e.data.byteOffset, e.data.byteLength);
+        if (this.waiting) this.waiting(data);
+      });
+    }
+    request(bytes) {
+      const run = () => new Promise((resolve, reject) => {
+        const echo = Math.min(bytes.length, 3);
+        const timer = setTimeout(() => { this.waiting = null; reject(new Error('The keyboard did not answer.')); }, 1500);
+        this.waiting = (reply) => {
+          for (let i = 1; i < echo; i++) if (reply[i] !== bytes[i]) return;
+          if (reply[0] !== bytes[0] && reply[0] !== CMD.unhandled) return;
+          clearTimeout(timer);
+          this.waiting = null;
+          if (reply[0] === CMD.unhandled) reject(new Rejected('The keyboard refused that command.'));
+          else resolve(reply);
+        };
+        const packet = new Uint8Array(PACKET);
+        packet.set(bytes);
+        this.device.sendReport(0, packet).catch((err) => { clearTimeout(timer); this.waiting = null; reject(err); });
+      });
+      const result = this.queue.then(run, run);
+      this.queue = result.catch(() => {});
+      return result;
+    }
+  }
+
+  // Stands in for the keyboard: the same commands, answered the way the firmware answers them.
+  class DemoLink {
+    constructor() {
+      const palette = [[0, 0], [234, 230], [128, 255], [0, 0], [0, 255], [21, 255], [43, 255], [85, 255], [106, 255], [148, 255], [170, 255], [191, 255], [213, 255], [30, 110], [185, 130], [110, 140]];
+      this.defaults = () => ({
+        color2: [128, 255],
+        palette: palette.map((c) => c.slice()),
+        paint: packPaint(Uint8Array.from(L.keys, (k) => (Math.round((k.x + k.w / 2) / L.width * 224) < 112 ? 1 : 2))),
+      });
+      this.fw = Object.assign({ rgb: { [RGB.brightness]: [200], [RGB.effect]: [L.painted], [RGB.speed]: [128], [RGB.color]: [234, 230] }, saves: 0 }, this.defaults());
+    }
+    async request(bytes) {
+      const d = new Uint8Array(PACKET);
+      d.set(bytes);
+      const [cmd, channel, id] = d;
+      const v = d.subarray(3);
+      const set = cmd === CMD.set;
+      const fw = this.fw;
+      let ok = false;
+      if (cmd === CMD.protocol) { d[1] = 0; d[2] = 0x0D; ok = true; }
+      else if (cmd === CMD.save && (channel === CH.keyboard || channel === CH.rgb)) { fw.saves++; ok = true; }
+      else if ((set || cmd === CMD.get) && channel === CH.rgb && fw.rgb[id]) {
+        if (set) fw.rgb[id] = Array.from(v.subarray(0, fw.rgb[id].length)); else v.set(fw.rgb[id]);
+        ok = true;
+      } else if ((set || cmd === CMD.get) && channel === CH.keyboard) {
+        if (id === KB.color2) { if (set) fw.color2 = [v[0], v[1]]; else v.set(fw.color2); ok = true; }
+        else if (id === KB.palette && v[0] >= 1 && v[0] < PALETTE) { if (set) fw.palette[v[0]] = [v[1], v[2]]; else v.set(fw.palette[v[0]], 1); ok = true; }
+        else if (id === KB.paint && v[1] <= CHUNK && v[0] + v[1] <= PAINT_BYTES) {
+          if (set) fw.paint.set(v.subarray(2, 2 + v[1]), v[0]); else v.set(fw.paint.subarray(v[0], v[0] + v[1]), 2);
+          ok = true;
+        } else if (id === KB.reset && set) { Object.assign(fw, this.defaults()); ok = true; }
+      }
+      if (!ok) throw new Rejected('The keyboard refused that command.');
+      return d;
+    }
+  }
+
+  // ---- Colour: QMK hue and saturation are 0-255; brightness is one setting for the whole board ----
+  function hsToCss(h, s) {
+    const hue = h / 256 * 6, sat = s / 255;
+    const k = (n) => { const x = (n + hue) % 6; return 1 - sat * Math.max(0, Math.min(x, 4 - x, 1)); };
+    return '#' + [k(5), k(3), k(1)].map((c) => Math.round(c * 255).toString(16).padStart(2, '0')).join('');
+  }
+  function cssToHs(hex) {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), span = max - min;
+    let hue = 0;
+    if (span > 0) {
+      if (max === r) hue = ((g - b) / span + 6) % 6;
+      else if (max === g) hue = (b - r) / span + 2;
+      else hue = (r - g) / span + 4;
+    }
+    return { h: Math.round(hue / 6 * 256) & 0xFF, s: max === 0 ? 0 : Math.round(span / max * 255) };
+  }
+  const isDark = (hex) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)); return 0.299 * r + 0.587 * g + 0.114 * b < 110; };
+
+  // ---- State ----
+  const state = {
+    link: null,
+    demo: false,
+    palette: Array.from({ length: PALETTE }, () => ({ h: 0, s: 0 })),
+    paint: new Uint8Array(KEYS),
+    selected: 1,
+    lighting: { brightness: 255, effect: 1, speed: 128, h: 0, s: 255 },
+    color2: { h: 128, s: 255 },
+  };
+  const $ = (id) => document.getElementById(id);
+  const ui = { board: $('board'), palette: $('palette'), status: $('status'), keys: [], swatches: [] };
+
+  function setStatus(text, error = false) { ui.status.textContent = text; ui.status.classList.toggle('error', error); }
+  function fail(err) { console.error(err); setStatus(err && err.message ? err.message : String(err), true); }
+
+  // ---- Talking to the keyboard ----
+  const get = (channel, id, args = []) => state.link.request([CMD.get, channel, id, ...args]);
+  const set = (channel, id, data = []) => state.link.request([CMD.set, channel, id, ...data]);
+
+  const saveTimers = {};
+  function saveSoon(channel) {
+    clearTimeout(saveTimers[channel]);
+    saveTimers[channel] = setTimeout(() => {
+      state.link.request([CMD.save, channel]).then(() => setStatus(state.demo ? DEMO_NOTE : 'Saved on the keyboard.'), fail);
+    }, 800);
+  }
+
+  let paintTimer = null;
+  function sendPaintSoon() {
+    if (paintTimer) return;
+    paintTimer = setTimeout(async () => {
+      paintTimer = null;
+      const bytes = packPaint(state.paint);
+      try {
+        for (let at = 0; at < PAINT_BYTES; at += CHUNK) {
+          const part = bytes.subarray(at, Math.min(at + CHUNK, PAINT_BYTES));
+          await set(CH.keyboard, KB.paint, [at, part.length, ...part]);
+        }
+        saveSoon(CH.keyboard);
+      } catch (err) { fail(err); }
+    }, 40);
+  }
+
+  function setLighting(id, data) {
+    set(CH.rgb, id, data).then(() => saveSoon(CH.rgb), fail);
+    renderLighting();
+  }
+
+  async function loadFromKeyboard() {
+    await state.link.request([CMD.protocol]);
+    try {
+      const c2 = await get(CH.keyboard, KB.color2);
+      state.color2 = { h: c2[3], s: c2[4] };
+    } catch (err) {
+      if (err instanceof Rejected) throw new Error('This keyboard has older firmware without painting. Flash v0.4.0 or later (the VIA build).');
+      throw err;
+    }
+    const one = async (id) => (await get(CH.rgb, id));
+    state.lighting.brightness = (await one(RGB.brightness))[3];
+    state.lighting.effect = (await one(RGB.effect))[3];
+    state.lighting.speed = (await one(RGB.speed))[3];
+    const color = await one(RGB.color);
+    state.lighting.h = color[3];
+    state.lighting.s = color[4];
+    for (let i = 1; i < PALETTE; i++) {
+      const p = await get(CH.keyboard, KB.palette, [i]);
+      state.palette[i] = { h: p[4], s: p[5] };
+    }
+    const bytes = new Uint8Array(PAINT_BYTES);
+    for (let at = 0; at < PAINT_BYTES; at += CHUNK) {
+      const count = Math.min(CHUNK, PAINT_BYTES - at);
+      const reply = await get(CH.keyboard, KB.paint, [at, count]);
+      bytes.set(reply.subarray(5, 5 + count), at);
+    }
+    state.paint = unpackPaint(bytes);
+  }
+
+  const DEMO_NOTE = 'Demo: no keyboard connected, nothing is sent anywhere.';
+  async function start(link, label) {
+    state.link = link;
+    state.demo = link instanceof DemoLink;
+    setStatus('Reading the keyboard...');
+    try {
+      await loadFromKeyboard();
+    } catch (err) {
+      state.link = null;
+      document.body.classList.add('disabled');
+      return fail(err);
+    }
+    document.body.classList.remove('disabled');
+    renderAll();
+    setStatus(label);
+  }
+
+  async function connect() {
+    if (!navigator.hid) return setStatus('This browser cannot talk to keyboards. Use Chrome or Edge on a computer.', true);
+    try {
+      const [device] = await navigator.hid.requestDevice({ filters: [{ vendorId: VID, productId: PID, usagePage: USAGE_PAGE, usage: USAGE }] });
+      if (device) await openDevice(device);
+    } catch (err) { fail(err); }
+  }
+  async function openDevice(device) {
+    if (!device.opened) await device.open();
+    await start(new HidLink(device), 'Connected to ' + (device.productName || 'the keyboard') + '.');
+  }
+
+  // ---- Painting ----
+  function paintKey(led, index) {
+    if (state.paint[led] === index) return;
+    state.paint[led] = index;
+    renderKey(led);
+    afterPaint();
+  }
+  function afterPaint() {
+    sendPaintSoon();
+    if (state.lighting.effect !== L.painted) {
+      state.lighting.effect = L.painted;
+      setLighting(RGB.effect, [L.painted]);
+    }
+  }
+  function paintBy(choose) {
+    L.keys.forEach((key, led) => { state.paint[led] = choose((key.x + key.w / 2) / L.width); });
+    renderBoard();
+    afterPaint();
+  }
+
+  // ---- Drawing ----
+  function renderKey(led) {
+    const el = ui.keys[led], index = state.paint[led];
+    if (index === 0) { el.style.background = ''; el.className = 'key'; return; }
+    const css = hsToCss(state.palette[index].h, state.palette[index].s);
+    el.style.background = css;
+    el.className = 'key lit' + (isDark(css) ? ' on-dark' : '');
+  }
+  function renderBoard() { for (let led = 0; led < KEYS; led++) renderKey(led); }
+  function layoutBoard() {
+    const unit = Math.max(30, Math.min(48, Math.floor((ui.board.parentElement.clientWidth - 2) / L.width)));
+    ui.board.style.width = L.width * unit + 'px';
+    ui.board.style.height = L.height * unit + 'px';
+    L.keys.forEach((key, led) => {
+      const s = ui.keys[led].style;
+      s.left = key.x * unit + 'px'; s.top = key.y * unit + 'px';
+      s.width = key.w * unit - 3 + 'px'; s.height = key.h * unit - 3 + 'px';
+    });
+  }
+  function renderPalette() {
+    ui.swatches.forEach((el, index) => {
+      el.classList.toggle('selected', index === state.selected);
+      if (index > 0) el.style.background = hsToCss(state.palette[index].h, state.palette[index].s);
+    });
+    const picker = $('swatch-color');
+    picker.disabled = state.selected === 0;
+    if (state.selected > 0) picker.value = hsToCss(state.palette[state.selected].h, state.palette[state.selected].s);
+  }
+  function renderLighting() {
+    const lit = state.lighting;
+    $('effect').value = String(lit.effect);
+    $('brightness').value = lit.brightness;
+    $('speed').value = lit.speed;
+    $('color').value = hsToCss(lit.h, lit.s);
+    $('color2').value = hsToCss(state.color2.h, state.color2.s);
+    const twoColour = L.twoColour.includes(lit.effect);
+    $('speed-row').hidden = lit.effect <= 1 || lit.effect === L.painted;
+    $('color-row').hidden = lit.effect === 0 || lit.effect === L.painted;
+    $('color2-row').hidden = !twoColour;
+  }
+  function renderAll() { renderPalette(); renderBoard(); renderLighting(); }
+
+  // ---- Building the page ----
+  L.keys.forEach((key, led) => {
+    const el = document.createElement('div');
+    el.className = 'key';
+    el.textContent = key.label;
+    el.title = key.label;
+    el.dataset.led = led;
+    ui.board.appendChild(el);
+    ui.keys.push(el);
+  });
+  for (let index = 0; index < PALETTE; index++) {
+    const el = document.createElement('button');
+    el.className = 'swatch' + (index === 0 ? ' off' : '');
+    el.title = index === 0 ? 'Off' : 'Colour ' + index;
+    el.addEventListener('click', () => { state.selected = index; renderPalette(); });
+    ui.palette.appendChild(el);
+    ui.swatches.push(el);
+  }
+  L.effects.forEach((name, number) => $('effect').add(new Option(name, number)));
+
+  const ledAt = (e) => { const el = document.elementFromPoint(e.clientX, e.clientY); return el && el.dataset.led !== undefined ? Number(el.dataset.led) : -1; };
+  let painting = false;
+  ui.board.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    painting = true;
+    const led = ledAt(e);
+    if (led >= 0) paintKey(led, state.selected);
+  });
+  ui.board.addEventListener('pointermove', (e) => { if (painting) { const led = ledAt(e); if (led >= 0) paintKey(led, state.selected); } });
+  window.addEventListener('pointerup', () => { painting = false; });
+  window.addEventListener('pointercancel', () => { painting = false; });
+  ui.board.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const led = ledAt(e);
+    if (led >= 0) { state.selected = state.paint[led]; renderPalette(); }
+  });
+
+  $('swatch-color').addEventListener('input', (e) => {
+    const index = state.selected;
+    if (index === 0) return;
+    state.palette[index] = cssToHs(e.target.value);
+    ui.swatches[index].style.background = e.target.value;
+    renderBoard();
+    set(CH.keyboard, KB.palette, [index, state.palette[index].h, state.palette[index].s]).then(() => saveSoon(CH.keyboard), fail);
+  });
+  $('fill').addEventListener('click', () => paintBy(() => state.selected));
+  $('halves').addEventListener('click', () => paintBy((x) => (x < 0.5 ? 1 : 2)));
+  $('thirds').addEventListener('click', () => paintBy((x) => (x < 1 / 3 ? 1 : x < 2 / 3 ? 2 : 3)));
+  $('hands').addEventListener('click', () => paintBy((x) => (Math.round(x * 224) < 69 ? 1 : 2)));
+  $('reset').addEventListener('click', async () => {
+    try {
+      await set(CH.keyboard, KB.reset);
+      await loadFromKeyboard();
+      renderAll();
+      saveSoon(CH.keyboard);
+    } catch (err) { fail(err); }
+  });
+
+  $('effect').addEventListener('change', (e) => { state.lighting.effect = Number(e.target.value); setLighting(RGB.effect, [state.lighting.effect]); });
+  $('brightness').addEventListener('input', (e) => { state.lighting.brightness = Number(e.target.value); setLighting(RGB.brightness, [state.lighting.brightness]); });
+  $('speed').addEventListener('input', (e) => { state.lighting.speed = Number(e.target.value); setLighting(RGB.speed, [state.lighting.speed]); });
+  $('color').addEventListener('input', (e) => { Object.assign(state.lighting, cssToHs(e.target.value)); setLighting(RGB.color, [state.lighting.h, state.lighting.s]); });
+  $('color2').addEventListener('input', (e) => {
+    state.color2 = cssToHs(e.target.value);
+    set(CH.keyboard, KB.color2, [state.color2.h, state.color2.s]).then(() => saveSoon(CH.keyboard), fail);
+  });
+
+  $('connect').addEventListener('click', connect);
+  $('demo').addEventListener('click', () => start(new DemoLink(), DEMO_NOTE));
+  window.addEventListener('resize', layoutBoard);
+  layoutBoard();
+  renderAll();
+
+  if (navigator.hid) {
+    navigator.hid.addEventListener('disconnect', (e) => {
+      if (state.link && state.link.device === e.device) {
+        state.link = null;
+        document.body.classList.add('disabled');
+        setStatus('The keyboard was unplugged.', true);
+      }
+    });
+    // A keyboard this page was allowed to use before can be opened without asking again.
+    navigator.hid.getDevices().then((devices) => {
+      const device = devices.find((d) => d.vendorId === VID && d.productId === PID && d.collections.some((c) => c.usagePage === USAGE_PAGE && c.usage === USAGE));
+      if (device && !state.link) openDevice(device).catch(fail);
+    });
+  } else {
+    setStatus('This browser cannot talk to keyboards. Use Chrome or Edge on a computer, or try the demo.', true);
+  }
+
+  window.K10_PAINTER = { state, packPaint, unpackPaint, hsToCss, cssToHs, HidLink, DemoLink, start };  // for tests and the console
+})();
+</script>
+</body>
+</html>

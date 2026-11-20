@@ -25,3 +25,10 @@
  */
 #define WEAR_LEVELING_LOGICAL_SIZE 1280
 #define WEAR_LEVELING_BACKING_SIZE 2560
+
+/*
+ * Bytes of that storage kept for the keyboard's own lighting settings: the second
+ * colour, the palette and the per-key painting. Must equal sizeof(k10_lighting_t)
+ * in k10_lighting.h; iso.c checks it. VIA's macros get what is left.
+ */
+#define EECONFIG_KB_DATA_SIZE 88

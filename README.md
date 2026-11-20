@@ -30,6 +30,8 @@ QMK and VIA firmware for the **original Keychron K10** (2021, Sonix SN32F248B), 
 
 - All 105 keys, UK/ISO layout.
 - Per-key RGB with QMK's RGB Matrix effects.
+- Painting: give every key its own colour from a web page (`tools/painter`). The painting is stored on the keyboard.
+- Three two-colour effects (wave, blend, fade) that move between two colours you pick.
 - The Win/Mac slide switch: a Windows layout and a Mac layout, each with its own Fn layer.
 - The four indicator LEDs at the top right: Num Lock, Caps Lock, and Mac / Windows following the slide switch. They stay on when the backlight is toggled off.
 - VIA: remapping, four layers, lighting menu.
@@ -108,6 +110,21 @@ VIA shows four layers:
 
 Remap the pair that matches your switch position. Flashing new firmware resets what you set in VIA.
 
+The Lighting tab's effect list comes from this file, so load the file again after flashing a newer release.
+
+## Painting the keys
+
+`tools/painter/index.html` is a page for colouring keys one by one: halves, thirds, single keys, anything. Open the file in Chrome or Edge, press "Connect keyboard" and pick the K10. It needs the VIA firmware. Nothing is installed and the page loads nothing from the internet.
+
+- Pick one of 15 colours, then click or drag across keys. The crossed-out swatch switches a key off.
+- Any of the 15 can be changed to any colour. "Halves", "Thirds" and "Left and right hand" give a quick start.
+- The painting is stored on the keyboard: it stays after unplugging and needs no program running. It shows whenever the lighting effect is "Painted (per key)", which the page selects as soon as you paint.
+- "Try without a keyboard" shows the page with nothing connected.
+
+The page and VIA's Lighting tab also set the two-colour effects. Two-Colour Wave, Blend and Fade move between the main colour and a second colour, so a wave can be pink and teal instead of a rainbow.
+
+The palette is 15 colours because the chip is nearly out of memory: a free colour for each of 105 keys does not fit.
+
 ## Lighting from the PC
 
 ```
@@ -141,6 +158,7 @@ keyboards/keychron/k10/rgb/iso/     the keyboard: definition, config, default an
 keyboards/keychron/k10/rgb/via_json VIA definition
 keyboards/keychron/k10/probe/       wiring-probe firmware used to map the board
 tools/                              layout generator, PC lighting control, pin-probe script
+tools/painter/                      the key-painting page
 scripts/build.ps1                   Windows build helper
 docs/porting-notes.md               hardware facts, how it was mapped, what is unknown
 ```
