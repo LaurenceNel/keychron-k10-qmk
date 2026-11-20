@@ -31,4 +31,4 @@
  * colour, the palette and the per-key painting. Must equal sizeof(k10_lighting_t)
  * in k10_lighting.h; iso.c checks it. VIA's macros get what is left.
  */
-#define EECONFIG_KB_DATA_SIZE 88
+#define EECONFIG_KB_DATA_SIZE 91

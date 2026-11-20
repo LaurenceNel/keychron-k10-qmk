@@ -109,7 +109,7 @@
               ]
             },
             {
-              "showIf": "{id_qmk_rgb_matrix_effect} > 1 && {id_qmk_rgb_matrix_effect} != 13",
+              "showIf": "{id_qmk_rgb_matrix_effect} != 0",
               "label": "Effect Speed",
               "type": "range",
               "options": [
@@ -140,6 +140,44 @@
                 "id_k10_color2",
                 0,
                 1
+              ]
+            },
+            {
+              "showIf": "{id_qmk_rgb_matrix_effect} == 1 || {id_qmk_rgb_matrix_effect} == 13 || {id_qmk_rgb_matrix_effect} == 14 || {id_qmk_rgb_matrix_effect} == 15 || {id_qmk_rgb_matrix_effect} == 16",
+              "label": "When Typing",
+              "type": "dropdown",
+              "content": [
+                "id_k10_reaction",
+                0,
+                5
+              ],
+              "options": [
+                [
+                  "Nothing",
+                  0
+                ],
+                [
+                  "Droplet",
+                  1
+                ],
+                [
+                  "Key Glow",
+                  2
+                ],
+                [
+                  "Wide Glow",
+                  3
+                ]
+              ]
+            },
+            {
+              "showIf": "({id_qmk_rgb_matrix_effect} == 1 || {id_qmk_rgb_matrix_effect} == 13 || {id_qmk_rgb_matrix_effect} == 14 || {id_qmk_rgb_matrix_effect} == 15 || {id_qmk_rgb_matrix_effect} == 16) && {id_k10_reaction} != 0",
+              "label": "Typing Colour",
+              "type": "color",
+              "content": [
+                "id_k10_reaction_color",
+                0,
+                6
               ]
             }
           ]

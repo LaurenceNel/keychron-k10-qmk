@@ -84,7 +84,7 @@ The default emulated EEPROM on this chip is 1024 bytes. Four VIA layers of a 6x2
 
 The limit is RAM, not flash: the storage is mirrored in RAM and the chip has 8 KB. With four layers the VIA build had 224 bytes of RAM unused, which is not enough for a fifth layer (252 bytes more). Flash is fine: the firmware ends near 40 KB of 64 KB.
 
-88 of the 1280 bytes hold the keyboard's own lighting settings (below), which leaves 143 for VIA macros. Those settings also take 88 bytes of RAM, so the VIA build now has 136 bytes unused.
+91 of the 1280 bytes hold the keyboard's own lighting settings (below), which leaves 140 for VIA macros. Those settings also take 91 bytes of RAM, so the VIA build now has 128 bytes unused.
 
 ## The keyboard's own lighting effects
 
@@ -96,6 +96,8 @@ The limit is RAM, not flash: the storage is mirrored in RAM and the chip has 8 K
 | 14 | Two-Colour Wave | Main colour and second colour |
 | 15 | Two-Colour Blend | Main colour and second colour |
 | 16 | Two-Colour Fade | Main colour and second colour |
+
+On top of that background there can be a reaction to typing, in its own colour: a droplet (a ring that spreads out from the pressed key), a key glow, or a wide glow. It uses the key presses QMK already tracks for its reactive effects, so it costs no RAM beyond its three bytes of settings. The reaction needs to know the background colour to blend with it, so it works where the firmware works that colour out itself: the four effects above, which add it as they draw, and QMK's Solid Colour, where `iso.c` lays it over the one colour in the indicator hook. The other built-in effects have no reaction.
 
 The two-colour effects mix red, green and blue directly, so only the two colours and the straight blend between them ever show. Mixing the hue instead passes through every colour in between (pink to teal by way of purple and blue), which read as a slow rainbow rather than two colours. The wave is a steepened sine, so most keys sit at one colour or the other.
 
@@ -110,9 +112,11 @@ The settings are read and written on VIA's custom channel (channel 0), with the 
 | 1 | hue, sat | Second colour of the two-colour effects |
 | 2 | index 1-15, hue, sat | One palette colour |
 | 3 | first byte, byte count (up to 27), bytes | The painting: four bits per key in LED order, low half of each byte first |
-| 4 | none (set only) | Back to the default palette and painting |
+| 4 | none (set only) | Back to the default palette, painting and reaction |
+| 5 | 0-3 | Reaction to typing: nothing, droplet, key glow, wide glow |
+| 6 | hue, sat | Colour of the reaction |
 
-Hue and saturation are 0-255, as everywhere in QMK. Changes take effect at once and are stored when the save command arrives. Not tried on the board yet.
+Hue and saturation are 0-255, as everywhere in QMK. Changes take effect at once and are stored when the save command arrives. Values 1 to 4 are tried on the board; 5 and 6 are not yet.
 
 ## Not done yet
 

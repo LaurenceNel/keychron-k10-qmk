@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "quantum.h"
+#include <lib/lib8tion/lib8tion.h>
 #include "k10_lighting.h"
 #ifdef VIA_ENABLE
 #    include "via.h"
 #endif
+
+// HSV to RGB the way the lighting engine does it. QMK defines this in rgb_matrix.c
+// without declaring it in a header.
+rgb_t rgb_matrix_hsv_to_rgb(hsv_t hsv);
 
 /*
  * The four indicator LEDs at the top right are part of the RGB matrix: they sit at
@@ -51,6 +56,20 @@ bool rgb_matrix_indicators_advanced_kb(uint8_t led_min, uint8_t led_max) {
         return false;
     }
 
+    // The typing reaction on top of QMK's own Solid Colour. The keyboard's effects in
+    // rgb_matrix_kb.inc add it themselves; here the background is simply the one colour.
+    if (rgb_matrix_get_mode() == RGB_MATRIX_SOLID_COLOR && rgb_matrix_get_flags() != LED_FLAG_NONE && k10_reaction_active()) {
+        rgb_t   base  = rgb_matrix_hsv_to_rgb(rgb_matrix_get_hsv());
+        rgb_t   color = k10_reaction_color();
+        uint8_t last  = led_max < K10_KEY_LEDS ? led_max : K10_KEY_LEDS;
+        for (uint8_t i = led_min; i < last; i++) {
+            uint8_t amount = k10_reaction_amount(i);
+            if (amount) {
+                rgb_matrix_set_color(i, lerp8by8(base.r, color.r, amount), lerp8by8(base.g, color.g, amount), lerp8by8(base.b, color.b, amount));
+            }
+        }
+    }
+
     led_t state = host_keyboard_led_state();
 
     set_indicator(led_min, led_max, K10_LED_NUM_LOCK, state.num_lock);
@@ -88,9 +107,9 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
 }
 
 /*
- * The keyboard's own lighting effects (rgb_matrix_kb.inc) and their settings:
- * a per-key painting from a 16-colour palette, and a second colour for the
- * two-colour effects. See k10_lighting.h.
+ * The keyboard's own lighting (rgb_matrix_kb.inc) and its settings: a per-key
+ * painting from a 16-colour palette, a second colour for the two-colour effects,
+ * and a reaction to typing that is laid over the background. See k10_lighting.h.
  */
 _Static_assert(sizeof(k10_lighting_t) == EECONFIG_KB_DATA_SIZE, "EECONFIG_KB_DATA_SIZE in config.h must equal sizeof(k10_lighting_t)");
 
@@ -120,10 +139,85 @@ static const k10_color_t k10_default_palette[K10_PALETTE_SIZE] = {
     {110, 140}, // mint
 };
 
-// Default painting: the left half of the board pink, the right half teal.
+/*
+ * The typing reaction. QMK keeps the last few key presses with the time since each
+ * (g_last_hit_tracker); these turn that into "how much reaction colour on this key".
+ * Time is scaled by the effect speed, as in QMK's own reactive effects. Distances are
+ * in LED coordinates, where one key is about 10 units.
+ */
+#    ifdef RGB_MATRIX_KEYREACTIVE_ENABLED
+// Scaled time after which a press no longer shows: a droplet's ring has left the board
+// (233 units corner to corner, plus its tail), and a glow has faded (255).
+#        define K10_REACTION_LIFE 320
+
+static uint16_t k10_hit_time(uint8_t hit) {
+    return scale16by8(g_last_hit_tracker.tick[hit], qadd8(rgb_matrix_config.speed, 1));
+}
+
+bool k10_reaction_active(void) {
+    if (k10_lighting.reaction == K10_REACTION_NONE) {
+        return false;
+    }
+    for (uint8_t hit = 0; hit < g_last_hit_tracker.count; hit++) {
+        if (k10_hit_time(hit) < K10_REACTION_LIFE) {
+            return true;
+        }
+    }
+    return false;
+}
+
+uint8_t k10_reaction_amount(uint8_t led) {
+    uint8_t amount = 0;
+    for (uint8_t hit = 0; hit < g_last_hit_tracker.count; hit++) {
+        uint16_t time = k10_hit_time(hit);
+        if (time >= K10_REACTION_LIFE) {
+            continue;
+        }
+        uint16_t fade; // 0 is full strength, 255 and up is nothing
+        if (k10_lighting.reaction == K10_REACTION_KEY_GLOW) {
+            if (g_last_hit_tracker.index[hit] != led) {
+                continue;
+            }
+            fade = time;
+        } else {
+            int16_t dx       = g_led_config.point[led].x - g_last_hit_tracker.x[hit];
+            int16_t dy       = g_led_config.point[led].y - g_last_hit_tracker.y[hit];
+            uint8_t distance = sqrt16(dx * dx + dy * dy);
+            if (k10_lighting.reaction == K10_REACTION_DROPLET) {
+                if (distance > time) {
+                    continue; // the ring has not reached this key yet
+                }
+                fade = (time - distance) * 4; // brightest at the ring's front, fading behind it
+            } else {
+                fade = time + distance * 5; // brightest at the key, fading with distance and time
+            }
+        }
+        if (fade < 255 && 255 - fade > amount) {
+            amount = 255 - fade;
+        }
+    }
+    return amount;
+}
+#    else  // no key tracking in this build, so no reaction
+bool k10_reaction_active(void) {
+    return false;
+}
+uint8_t k10_reaction_amount(uint8_t led) {
+    return 0;
+}
+#    endif // RGB_MATRIX_KEYREACTIVE_ENABLED
+
+rgb_t k10_reaction_color(void) {
+    hsv_t hsv = {k10_lighting.reaction_color.h, k10_lighting.reaction_color.s, rgb_matrix_config.hsv.v};
+    return rgb_matrix_hsv_to_rgb(hsv);
+}
+
+// Default painting: the left half of the board pink, the right half teal. No reaction.
 static void k10_lighting_defaults(void) {
-    k10_lighting.version = K10_LIGHTING_VERSION;
-    k10_lighting.color2  = k10_default_palette[2];
+    k10_lighting.version        = K10_LIGHTING_VERSION;
+    k10_lighting.reaction       = K10_REACTION_NONE;
+    k10_lighting.reaction_color = k10_default_palette[1];
+    k10_lighting.color2         = k10_default_palette[2];
     memcpy(k10_lighting.palette, k10_default_palette, sizeof(k10_default_palette));
     for (uint8_t i = 0; i < K10_KEY_LEDS; i++) {
         k10_paint_set(i, g_led_config.point[i].x < 112 ? 1 : 2);
@@ -145,10 +239,12 @@ void keyboard_post_init_kb(void) {
  * own lighting tab and tools/painter can both edit them. Values:
  */
 enum k10_via_value {
-    id_k10_color2  = 1, // [hue, sat]
-    id_k10_palette = 2, // [index 1-15, hue, sat]
-    id_k10_paint   = 3, // [first byte, byte count, bytes...]: the painting, four bits per key
-    id_k10_reset   = 4, // set only: back to the default palette and painting
+    id_k10_color2         = 1, // [hue, sat]
+    id_k10_palette        = 2, // [index 1-15, hue, sat]
+    id_k10_paint          = 3, // [first byte, byte count, bytes...]: the painting, four bits per key
+    id_k10_reset          = 4, // set only: back to the default palette, painting and reaction
+    id_k10_reaction       = 5, // [enum k10_reaction]: what typing does on top of the background
+    id_k10_reaction_color = 6, // [hue, sat]
 };
 
 // A 32-byte packet, less the command, channel, value id, first byte and byte count.
@@ -205,6 +301,25 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                         return;
                     }
                     break;
+                case id_k10_reaction:
+                    if (!set) {
+                        value[0] = k10_lighting.reaction;
+                        return;
+                    }
+                    if (value[0] < K10_REACTION_COUNT) {
+                        k10_lighting.reaction = value[0];
+                        return;
+                    }
+                    break;
+                case id_k10_reaction_color:
+                    if (set) {
+                        k10_lighting.reaction_color.h = value[0];
+                        k10_lighting.reaction_color.s = value[1];
+                    } else {
+                        value[0] = k10_lighting.reaction_color.h;
+                        value[1] = k10_lighting.reaction_color.s;
+                    }
+                    return;
             }
         }
     }

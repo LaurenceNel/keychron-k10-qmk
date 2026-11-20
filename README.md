@@ -32,6 +32,7 @@ QMK and VIA firmware for the **original Keychron K10** (2021, Sonix SN32F248B), 
 - Per-key RGB with QMK's RGB Matrix effects.
 - Painting: give every key its own colour from a web page (`tools/painter`). The painting is stored on the keyboard.
 - Three two-colour effects (wave, blend, fade) that move between two colours you pick.
+- Typing reactions on top of the background: a droplet, a key glow or a wide glow, in their own colour.
 - The Win/Mac slide switch: a Windows layout and a Mac layout, each with its own Fn layer.
 - The four indicator LEDs at the top right: Num Lock, Caps Lock, and Mac / Windows following the slide switch. They stay on when the backlight is toggled off.
 - VIA: remapping, four layers, lighting menu.
@@ -122,7 +123,16 @@ The Lighting tab's effect list comes from this file, so load the file again afte
 - Profiles: save the current look under a name and load it back later. Profiles are kept in the browser, not on the keyboard, which holds one look at a time. Export them to a file to back them up or move them to another computer.
 - "Try without a keyboard" shows the page with nothing connected.
 
-The page and VIA's Lighting tab also set the two-colour effects. Two-Colour Wave, Blend and Fade use the main colour and a second colour, so a wave can be bands of pink and teal instead of a rainbow. The page's picture of the keyboard previews them as you change the colours and speed.
+### Background and reaction
+
+The lighting works in two layers, both set from the page or from VIA's Lighting tab.
+
+- **The effect is the background.** Besides QMK's own effects there are Painted and three two-colour effects: Two-Colour Wave, Blend and Fade use the main colour and a second colour, so a wave can be bands of pink and teal instead of a rainbow.
+- **"When typing" adds a reaction on top**, in its own colour: Droplet (a ring spreads out from the pressed key), Key Glow (the key lights and fades) or Wide Glow (the key and its neighbours). Speed sets how fast it spreads.
+
+Reactions sit on Solid Colour, Painted and the two-colour effects. A solid teal keyboard with pink droplets is Solid Colour plus Droplet.
+
+The page's picture of the keyboard previews both layers. Type with the page in front and the picture reacts as the keyboard does.
 
 The palette is 15 colours because the chip is nearly out of memory: a free colour for each of 105 keys does not fit.
 

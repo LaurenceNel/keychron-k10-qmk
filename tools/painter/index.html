@@ -91,8 +91,10 @@
       <label id="speed-row">Speed <input type="range" id="speed" min="0" max="255"></label>
       <label id="color-row">Colour <input type="color" id="color"></label>
       <label id="color2-row">Second colour <input type="color" id="color2"></label>
+      <label id="reaction-row">When typing <select id="reaction"></select></label>
+      <label id="reaction-color-row">Typing colour <input type="color" id="reaction-color"></label>
     </div>
-    <p class="hint">The painting shows when the effect is "Painted (per key)". The two-colour effects use the colour and the second colour, and the picture above previews them. The same settings are in VIA's Lighting tab.</p>
+    <p class="hint">The effect is the background. "When typing" adds a reaction on top of it, on Solid Colour, the painting and the two-colour effects. The picture above previews both: type on the keyboard with this page in front and it reacts as well. The same settings are in VIA's Lighting tab.</p>
   </section>
 
   <section class="needs-link">
@@ -124,7 +126,7 @@
   const CMD = { protocol: 0x01, set: 0x07, get: 0x08, save: 0x09, unhandled: 0xFF };
   const CH = { keyboard: 0, rgb: 3 };
   const RGB = { brightness: 1, effect: 2, speed: 3, color: 4 };
-  const KB = { color2: 1, palette: 2, paint: 3, reset: 4 };
+  const KB = { color2: 1, palette: 2, paint: 3, reset: 4, reaction: 5, reactionColor: 6 };
   const PACKET = 32, CHUNK = 27;
 
   const L = window.K10_LAYOUT;
@@ -132,8 +134,10 @@
   const PAINT_BYTES = Math.ceil(KEYS / 2);
   const PALETTE = 16;
   const [WAVE, BLEND] = L.twoColour;
-  // Each key's LED position across the board, 0-224, as the firmware has it.
-  const LED_X = L.keys.map((key) => Math.min(224, Math.round((key.x + key.w / 2) / L.width * 224)));
+  const SOLID = 1;
+  const DROPLET = 1, KEY_GLOW = 2;
+  // Each key's LED position as the firmware has it: 0-224 across, 0-64 down.
+  const LED_X = L.keys.map((key) => key.ledX), LED_Y = L.keys.map((key) => key.ledY);
 
   function packPaint(paint) {
     const out = new Uint8Array(PAINT_BYTES);
@@ -188,6 +192,8 @@
       const palette = [[0, 0], [234, 230], [128, 255], [0, 0], [0, 255], [21, 255], [43, 255], [85, 255], [106, 255], [148, 255], [170, 255], [191, 255], [213, 255], [30, 110], [185, 130], [110, 140]];
       this.defaults = () => ({
         color2: [128, 255],
+        reaction: [0],
+        reactionColor: [234, 230],
         palette: palette.map((c) => c.slice()),
         paint: packPaint(Uint8Array.from(LED_X, (x) => (x < 112 ? 1 : 2))),
       });
@@ -213,6 +219,9 @@
           if (set) fw.paint.set(v.subarray(2, 2 + v[1]), v[0]); else v.set(fw.paint.subarray(v[0], v[0] + v[1]), 2);
           ok = true;
         } else if (id === KB.reset && set) { Object.assign(fw, this.defaults()); ok = true; }
+        else if (id === KB.reaction && !set) { v[0] = fw.reaction[0]; ok = true; }
+        else if (id === KB.reaction && v[0] < L.reactions.length) { fw.reaction = [v[0]]; ok = true; }
+        else if (id === KB.reactionColor) { if (set) fw.reactionColor = [v[0], v[1]]; else v.set(fw.reactionColor); ok = true; }
       }
       if (!ok) throw new Rejected('The keyboard refused that command.');
       return d;
@@ -250,6 +259,9 @@
     selected: 1,
     lighting: { brightness: 255, effect: 1, speed: 128, h: 0, s: 255 },
     color2: { h: 128, s: 255 },
+    reaction: 0,
+    reactionColor: { h: 234, s: 230 },
+    hasReactions: true,
   };
   const $ = (id) => document.getElementById(id);
   const ui = { board: $('board'), palette: $('palette'), status: $('status'), keys: [], swatches: [] };
@@ -317,6 +329,16 @@
       bytes.set(reply.subarray(5, 5 + count), at);
     }
     state.paint = unpackPaint(bytes);
+    try {
+      state.reaction = (await get(CH.keyboard, KB.reaction))[3];
+      const color = await get(CH.keyboard, KB.reactionColor);
+      state.reactionColor = { h: color[3], s: color[4] };
+      state.hasReactions = true;
+    } catch (err) {
+      if (!(err instanceof Rejected)) throw err;
+      state.hasReactions = false;  // firmware from before typing reactions: everything else still works
+      state.reaction = 0;
+    }
   }
 
   async function start(link, label) {
@@ -373,37 +395,81 @@
     el.style.background = rgbToCss(rgb);
     el.className = 'key lit' + (isDark(rgb) ? ' on-dark' : '');
   }
-  function renderBoard() {
-    for (let led = 0; led < KEYS; led++) {
-      const index = state.paint[led];
-      showKey(led, index === 0 ? null : hsToRgb(state.palette[index].h, state.palette[index].s));
-    }
-  }
-
-  // The two-colour effects, worked out the way rgb_matrix_kb.inc does it, so the picture
-  // moves like the keyboard. `ms` is a clock in milliseconds.
+  // The picture shows what the keyboard shows, worked out the way the firmware does it
+  // (rgb_matrix_kb.inc and iso.c), wherever the page can: Solid Colour, the painting and
+  // the two-colour effects, each with the typing reaction on top. `now` is in milliseconds.
   const sin8 = (theta) => Math.round(128 + 127 * Math.sin((theta & 255) / 256 * 2 * Math.PI));
   const ease = (i) => { const s = i / 255; return Math.round((3 * s * s - 2 * s * s * s) * 255); };
   const band = (theta) => ease(Math.max(0, Math.min(255, Math.trunc((sin8(theta) - 128) * 5 / 2) + 128)));
-  function drawPreview(ms) {
+  const mix = (a, b, amount) => a.map((c, i) => Math.round(c + (b[i] - c) * amount / 255));
+  const previewable = () => L.reactive.includes(state.lighting.effect);
+
+  // Recent key presses for the typing reaction: the last eight, as the firmware keeps.
+  const hits = [];
+  const REACTION_LIFE = 320;
+  const hitTime = (hit, now) => (Math.min(65535, Math.max(0, Math.floor(now - hit.at))) * Math.min(255, state.lighting.speed + 1)) >> 8;
+  const reacting = (now) => state.reaction !== 0 && previewable() && hits.some((hit) => hitTime(hit, now) < REACTION_LIFE);
+  function reactionAmount(led, now) {
+    let amount = 0;
+    for (const hit of hits) {
+      const time = hitTime(hit, now);
+      if (time >= REACTION_LIFE) continue;
+      let fade;  // 0 is full strength, 255 and up is nothing
+      if (state.reaction === KEY_GLOW) {
+        if (hit.led !== led) continue;
+        fade = time;
+      } else {
+        const dx = LED_X[led] - LED_X[hit.led], dy = LED_Y[led] - LED_Y[hit.led];
+        const distance = Math.floor(Math.sqrt(dx * dx + dy * dy));
+        if (state.reaction === DROPLET) {
+          if (distance > time) continue;
+          fade = (time - distance) * 4;
+        } else fade = time + distance * 5;
+      }
+      if (fade < 255) amount = Math.max(amount, 255 - fade);
+    }
+    return amount;
+  }
+
+  function drawFrame(now) {
     const lit = state.lighting;
     const first = hsToRgb(lit.h, lit.s), second = hsToRgb(state.color2.h, state.color2.s);
-    const time = (((ms & 0xFFFF) * Math.min(255, (lit.speed >> 2) + 1)) >> 8) & 0xFF;
+    const tint = hsToRgb(state.reactionColor.h, state.reactionColor.s);
+    const time = (((Math.floor(now) & 0xFFFF) * Math.min(255, (lit.speed >> 2) + 1)) >> 8) & 0xFF;
+    const react = reacting(now);
     for (let led = 0; led < KEYS; led++) {
-      let amount;
-      if (lit.effect === WAVE) amount = band(((LED_X[led] * 2) & 255) - time);
-      else if (lit.effect === BLEND) amount = (LED_X[led] * 291) >> 8;
-      else amount = band(time);
-      showKey(led, first.map((c, i) => Math.round(c + (second[i] - c) * amount / 255)));
+      let rgb;
+      if (lit.effect === SOLID) rgb = first;
+      else if (lit.effect === WAVE) rgb = mix(first, second, band(((LED_X[led] * 2) & 255) - time));
+      else if (lit.effect === BLEND) rgb = mix(first, second, (LED_X[led] * 291) >> 8);
+      else if (L.twoColour.includes(lit.effect)) rgb = mix(first, second, band(time));
+      else {
+        // Painted, or an effect the page cannot preview: show the painting. null is an unlit key.
+        const index = state.paint[led];
+        rgb = index === 0 ? null : hsToRgb(state.palette[index].h, state.palette[index].s);
+      }
+      if (react) {
+        const amount = reactionAmount(led, now);
+        if (amount) rgb = mix(rgb || [0, 0, 0], tint, amount);
+      }
+      showKey(led, rgb);
     }
   }
-  const previewing = () => state.link !== null && L.twoColour.includes(state.lighting.effect);
+  const renderBoard = () => drawFrame(performance.now());
+
+  // Redraw every frame only while something on the picture is moving.
+  const moving = (now) => state.link !== null && (state.lighting.effect === WAVE || (L.twoColour.includes(state.lighting.effect) && state.lighting.effect !== BLEND) || reacting(now));
   let frame = null;
   function animate(now) {
     frame = null;
-    if (!previewing()) return;
-    drawPreview(now);
-    frame = requestAnimationFrame(animate);
+    drawFrame(now);
+    if (moving(now)) frame = requestAnimationFrame(animate);
+  }
+  function kick() { if (frame === null) frame = requestAnimationFrame(animate); }
+  function addHit(led) {
+    hits.push({ led, at: performance.now() });
+    if (hits.length > 8) hits.shift();
+    kick();
   }
 
   function layoutBoard() {
@@ -433,16 +499,24 @@
     $('color').value = hsToCss(lit.h, lit.s);
     $('color2').value = hsToCss(state.color2.h, state.color2.s);
     const twoColour = L.twoColour.includes(lit.effect);
-    $('speed-row').hidden = lit.effect <= 1 || lit.effect === L.painted || lit.effect === BLEND;
+    const reactive = previewable() && state.hasReactions;
+    const reactionOn = reactive && state.reaction !== 0;
+    $('reaction').value = String(state.reaction);
+    $('reaction-color').value = hsToCss(state.reactionColor.h, state.reactionColor.s);
+    $('reaction-row').hidden = !reactive;
+    $('reaction-color-row').hidden = !reactionOn;
+    // Speed drives the moving effects and how fast a typing reaction spreads.
+    $('speed-row').hidden = !(reactionOn || (lit.effect > 1 && lit.effect !== L.painted && lit.effect !== BLEND));
     $('color-row').hidden = lit.effect === 0 || lit.effect === L.painted;
     $('color2-row').hidden = !twoColour;
 
     const note = $('board-note');
     note.hidden = lit.effect === L.painted;
-    note.textContent = twoColour
+    note.textContent = previewable()
       ? 'Preview of "' + L.effects[lit.effect] + '". Painting a key switches back to the painting.'
       : 'The keyboard is showing "' + L.effects[lit.effect] + '". This picture is your painting, which shows when the effect is "Painted (per key)".';
-    if (previewing()) { if (frame === null) frame = requestAnimationFrame(animate); } else renderBoard();
+    renderBoard();
+    kick();
   }
   function renderAll() { renderPalette(); renderBoard(); renderLighting(); renderProfiles(); }
 
@@ -457,7 +531,11 @@
     if (!name || !Number.isInteger(p.effect) || p.effect < 0 || p.effect >= L.effects.length || !byte(p.speed) || !pair(p.color) || !pair(p.color2)) return null;
     if (!Array.isArray(p.palette) || p.palette.length !== PALETTE || !p.palette.every(pair)) return null;
     if (!Array.isArray(p.paint) || p.paint.length !== KEYS || !p.paint.every((v) => Number.isInteger(v) && v >= 0 && v < PALETTE)) return null;
-    return { name, effect: p.effect, speed: p.speed, color: p.color.slice(), color2: p.color2.slice(), palette: p.palette.map((c) => c.slice()), paint: p.paint.slice() };
+    // Profiles saved before typing reactions existed have neither field.
+    const reaction = p.reaction === undefined ? 0 : p.reaction;
+    const reactionColor = p.reactionColor === undefined ? [234, 230] : p.reactionColor;
+    if (!Number.isInteger(reaction) || reaction < 0 || reaction >= L.reactions.length || !pair(reactionColor)) return null;
+    return { name, effect: p.effect, speed: p.speed, color: p.color.slice(), color2: p.color2.slice(), reaction, reactionColor: reactionColor.slice(), palette: p.palette.map((c) => c.slice()), paint: p.paint.slice() };
   }
   function readProfiles() {
     try {
@@ -471,17 +549,25 @@
   }
   function currentProfile(name) {
     const lit = state.lighting;
-    return { name, effect: lit.effect, speed: lit.speed, color: [lit.h, lit.s], color2: [state.color2.h, state.color2.s], palette: state.palette.map((c) => [c.h, c.s]), paint: Array.from(state.paint) };
+    return { name, effect: lit.effect, speed: lit.speed, color: [lit.h, lit.s], color2: [state.color2.h, state.color2.s], reaction: state.reaction, reactionColor: [state.reactionColor.h, state.reactionColor.s], palette: state.palette.map((c) => [c.h, c.s]), paint: Array.from(state.paint) };
   }
   async function applyProfile(p) {
     state.palette = p.palette.map(([h, s]) => ({ h, s }));
     state.paint = Uint8Array.from(p.paint);
     state.color2 = { h: p.color2[0], s: p.color2[1] };
     Object.assign(state.lighting, { effect: p.effect, speed: p.speed, h: p.color[0], s: p.color[1] });
+    if (state.hasReactions) {
+      state.reaction = p.reaction;
+      state.reactionColor = { h: p.reactionColor[0], s: p.reactionColor[1] };
+    }
     renderAll();
     for (let i = 1; i < PALETTE; i++) await set(CH.keyboard, KB.palette, [i, p.palette[i][0], p.palette[i][1]]);
     await sendPaint();
     await set(CH.keyboard, KB.color2, p.color2);
+    if (state.hasReactions) {
+      await set(CH.keyboard, KB.reaction, [p.reaction]);
+      await set(CH.keyboard, KB.reactionColor, p.reactionColor);
+    }
     await set(CH.rgb, RGB.speed, [p.speed]);
     await set(CH.rgb, RGB.color, p.color);
     await set(CH.rgb, RGB.effect, [p.effect]);
@@ -540,7 +626,7 @@
     if (index === 0) return;
     state.palette[index] = cssToHs(e.target.value);
     ui.swatches[index].style.background = e.target.value;
-    if (!previewing()) renderBoard();
+    renderBoard();
     set(CH.keyboard, KB.palette, [index, state.palette[index].h, state.palette[index].s]).then(() => saveSoon(CH.keyboard), fail);
   });
   $('fill').addEventListener('click', () => paintBy(() => state.selected));
@@ -564,6 +650,42 @@
     state.color2 = cssToHs(e.target.value);
     set(CH.keyboard, KB.color2, [state.color2.h, state.color2.s]).then(() => saveSoon(CH.keyboard), fail);
   });
+
+  L.reactions.forEach((name, number) => $('reaction').add(new Option(name, number)));
+  $('reaction').addEventListener('change', (e) => {
+    state.reaction = Number(e.target.value);
+    set(CH.keyboard, KB.reaction, [state.reaction]).then(() => saveSoon(CH.keyboard), fail);
+    renderLighting();
+  });
+  $('reaction-color').addEventListener('input', (e) => {
+    state.reactionColor = cssToHs(e.target.value);
+    set(CH.keyboard, KB.reactionColor, [state.reactionColor.h, state.reactionColor.s]).then(() => saveSoon(CH.keyboard), fail);
+  });
+
+  // Typing with this page in front plays the reaction on the picture, as the keyboard does
+  // on its own. Keys the browser never hears about (Fn, the light key) are simply missing.
+  const CODES = {
+    Escape: 'Esc', PrintScreen: 'PrtSc', ScrollLock: 'Key2', Backquote: '`', Minus: '-', Equal: '=', Backspace: 'Bksp',
+    Insert: 'Ins', Home: 'Home', PageUp: 'PgUp', Delete: 'Del', End: 'End', PageDown: 'PgDn',
+    NumLock: 'NumLk', NumpadDivide: 'P/', NumpadMultiply: 'P*', NumpadSubtract: 'P-', NumpadAdd: 'P+', NumpadEnter: 'PEnter', NumpadDecimal: 'P.',
+    Tab: 'Tab', BracketLeft: '[', BracketRight: ']', CapsLock: 'Caps', Semicolon: ';', Quote: "'", Backslash: '#', Enter: 'Enter',
+    ShiftLeft: 'LShift', IntlBackslash: '\\', Comma: ',', Period: '.', Slash: '/', ShiftRight: 'RShift',
+    ControlLeft: 'LCtrl', MetaLeft: 'LWin', AltLeft: 'LAlt', Space: 'Space', AltRight: 'RAlt', MetaRight: 'RWin', ControlRight: 'RCtrl',
+    ArrowUp: 'Up', ArrowLeft: 'Left', ArrowDown: 'Down', ArrowRight: 'Right',
+  };
+  for (let n = 0; n <= 9; n++) { CODES['Digit' + n] = String(n); CODES['Numpad' + n] = 'P' + n; }
+  for (let n = 1; n <= 12; n++) CODES['F' + n] = 'F' + n;
+  for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') CODES['Key' + letter] = letter;
+  const ledByLabel = new Map(L.keys.map((key, led) => [key.label, led]));
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat || !state.link || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    const led = ledByLabel.get(CODES[e.code]);
+    if (led !== undefined) addHit(led);
+  });
+  // Buttons and lists let go of the keyboard once used, so typing to try a reaction
+  // cannot press "Reset to defaults" again or change the effect by accident.
+  document.addEventListener('click', (e) => { const button = e.target.closest('button'); if (button) button.blur(); });
+  document.addEventListener('change', (e) => { if (e.target.tagName === 'SELECT') e.target.blur(); });
 
   $('profile-list').addEventListener('change', (e) => { $('profile-name').value = e.target.value; });
   $('profile-save').addEventListener('click', () => {
@@ -639,7 +761,7 @@
   }
 
   // For tests and the console.
-  window.K10_PAINTER = { state, packPaint, unpackPaint, hsToCss, cssToHs, HidLink, DemoLink, start, drawPreview, readProfiles, cleanProfile, importProfiles };
+  window.K10_PAINTER = { state, packPaint, unpackPaint, hsToCss, cssToHs, HidLink, DemoLink, start, drawFrame, addHit, hits, readProfiles, cleanProfile, importProfiles };
 })();
 </script>
 </body>
