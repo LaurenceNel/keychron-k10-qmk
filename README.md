@@ -43,6 +43,7 @@ QMK and VIA firmware for the **original Keychron K10** (2021, Sonix SN32F248B), 
 
 - Bluetooth (not planned).
 - The Mac layout has not been tried on a Mac yet.
+- Lighting: painting and the Droplet reaction are checked on the board. Key Glow, Wide Glow and the two-colour effects are checked in the painter's simulation of the firmware, not yet each by eye.
 - The Cable/BT switch does nothing, except that its middle Off position cuts power.
 - ANSI layout.
 

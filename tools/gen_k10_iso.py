@@ -264,7 +264,10 @@ if len(sys.argv) > 2:
         "vendorId": "0x3434",
         "productId": "0xFE13",
         "matrix": {"rows": len(rows), "cols": len(cols)},
-        "keycodes": ["qmk_lighting"],
+        # Which lighting keycodes VIA offers. With its stock lighting menu VIA works this out
+        # itself from "qmk_lighting"; with a menu of our own it has to be told, or it lists the
+        # underglow keycodes too, which do nothing on this board.
+        "keycodes": ["qmk_rgb_matrix_keycodes"],
         "menus": [lighting],
         "layouts": {"keymap": kle},
     }
